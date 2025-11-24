@@ -12,5 +12,18 @@ wheels/
 # .env file
 .env
 
+
 # Chainlit
 chainlit.db
+.chainlit/
+
+# Application Temp Files
+tmp_*
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
