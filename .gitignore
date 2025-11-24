@@ -30,3 +30,6 @@ Thumbs.db
 
 # Documents
 .files/
+
+# Uploads
+uploads/

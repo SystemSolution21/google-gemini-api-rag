@@ -1,8 +1,13 @@
+# imports built-in modules
 import os
+import time
 from pathlib import Path
+
+# imports third-party modules
 import google.generativeai as genai
 from dotenv import load_dotenv
 
+# load environment variables
 load_dotenv()
 
 # Configure Gemini API
@@ -21,15 +26,17 @@ generation_config = {
     "response_mime_type": "text/plain",
 }
 
+
 def upload_file(file_path: str, display_name: str = None):
     """Uploads a file to Gemini API."""
     if not display_name:
         display_name = Path(file_path).name
-    
+
     print(f"Uploading file: {display_name}...")
     file_ref = genai.upload_file(path=file_path, display_name=display_name)
     print(f"Completed upload: {file_ref.uri}")
     return file_ref
+
 
 def wait_for_files_active(files):
     """Waits for the given files to be active."""
@@ -38,22 +45,25 @@ def wait_for_files_active(files):
         file = genai.get_file(name)
         while file.state.name == "PROCESSING":
             print(".", end="", flush=True)
-            import time
+
             time.sleep(2)
             file = genai.get_file(name)
         if file.state.name != "ACTIVE":
             raise Exception(f"File {file.name} failed to process")
     print("...all files ready")
 
+
 def create_chat_session(files=None):
     """Creates a chat session with the given files in history/context."""
-    
+
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
+        model_name="gemini-2.0-flash",
         generation_config=generation_config,
-        system_instruction="You are a helpful assistant. You have access to the provided files. Answer questions based on the information in these files."
+        system_instruction="""You are a helpful assistant. You have access to the provided files. 
+        Answer questions based on the information in these files. 
+        Always cite your sources using the provided context.""",
     )
-    
+
     history = []
     if files:
         # In the new Gemini API, we can pass files directly in the history or message
@@ -61,14 +71,9 @@ def create_chat_session(files=None):
         # or use the File Search tool if we were using the Assistants API equivalent.
         # For standard GenerativeModel, passing the file object in the history works well for 1.5 Flash.
         for file in files:
-            history.append(
-                {
-                    "role": "user",
-                    "parts": [file]
-                }
-            )
+            history.append({"role": "user", "parts": [file]})
             # Add a dummy model response to acknowledge receipt, to keep chat history balanced if needed
             # Or just start the chat. 1.5 Flash handles mixed content well.
-            
+
     chat = model.start_chat(history=history)
     return chat

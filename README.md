@@ -6,8 +6,9 @@ A Python-based RAG application using **Chainlit** and **Gemini API**.
 
 1. **API Key**: You need a Google Gemini API Key.
     - Get it here: [Google AI Studio](https://aistudio.google.com/app/apikey)
-    - Open the `.env` file in your project folder: `c:\Users\rs258\MyAI\GoogleAI\google-gemini-api-rag\.env`
+    - Open the `.env.example` file in your project folder: `c:\path-to-project\google-gemini-api-rag\.env`
     - Paste your key: `GOOGLE_API_KEY=your_actual_key_here`
+    - Rename the file to `.env`
 
 ## How to Run
 
@@ -23,8 +24,8 @@ A Python-based RAG application using **Chainlit** and **Gemini API**.
 ## How to Use
 
 1. **Upload**: The chat interface will ask you to upload a file (PDF or Text).
-2. **Wait**: The app will upload the file to Gemini and wait for it to be processed.
-3. **Chat**: Once processed, you can ask questions like:
+2. **Auto-Summary**: The app will automatically process the file and display a **summary with citations** immediately.
+3. **Chat**: You can then continue to ask specific questions like:
     - "Summarize this document."
     - "What are the key takeaways?"
     - "Find the section about X."
