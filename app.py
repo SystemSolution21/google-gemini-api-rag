@@ -15,19 +15,19 @@ import rag_manager
 # In Chainlit, we usually store session data in cl.user_session
 
 
-def cleanup_upload_folder():
-    """Delete the upload folder and all its contents when the app exits."""
-    upload_path = Path("upload")
-    if upload_path.exists():
+def cleanup_public_folder():
+    """Delete the public folder and all its contents when the app exits."""
+    public_path = Path("public")
+    if public_path.exists():
         try:
-            shutil.rmtree(upload_path)
-            print("✓ Cleaned up upload folder")
+            shutil.rmtree(public_path)
+            print("✓ Cleaned up public folder")
         except Exception as e:
-            print(f"Warning: Could not clean up upload folder: {e}")
+            print(f"Warning: Could not clean up public folder: {e}")
 
 
 # Register cleanup function to run when the app exits
-atexit.register(cleanup_upload_folder)
+atexit.register(cleanup_public_folder)
 
 
 def format_response_with_citations(
@@ -41,25 +41,25 @@ def format_response_with_citations(
         # Pattern for ", p. X)" - inline citations with quotes
         answer_text = re.sub(
             r'",\s*p\.\s*(\d+)\)',
-            rf'", [p. \1](/upload/{source_document_name}#page=\1))',
+            rf'", [p. \1](/public/{source_document_name}#page=\1))',
             answer_text,
         )
         # Pattern for (p. X) - standalone citations
         answer_text = re.sub(
             r"\(p\.\s*(\d+)\)",
-            rf"([p. \1](/upload/{source_document_name}#page=\1))",
+            rf"([p. \1](/public/{source_document_name}#page=\1))",
             answer_text,
         )
         # Pattern for ", p. X-Y)" - inline range citations
         answer_text = re.sub(
             r'",\s*p\.\s*(\d+)-(\d+)\)',
-            rf'", [p. \1-\2](/upload/{source_document_name}#page=\1))',
+            rf'", [p. \1-\2](/public/{source_document_name}#page=\1))',
             answer_text,
         )
         # Pattern for (p. X-Y) - standalone range citations
         answer_text = re.sub(
             r"\(p\.\s*(\d+)-(\d+)\)",
-            rf"([p. \1-\2](/upload/{source_document_name}#page=\1))",
+            rf"([p. \1-\2](/public/{source_document_name}#page=\1))",
             answer_text,
         )
 
@@ -87,8 +87,8 @@ def format_response_with_citations(
 
 @cl.on_chat_start
 async def start():
-    # Ensure upload directory exists for serving PDF files (temporary storage)
-    os.makedirs("upload", exist_ok=True)
+    # Ensure public directory exists for serving PDF files (temporary storage)
+    os.makedirs("public", exist_ok=True)
 
     # Ask user to upload a file
     files_uploaded = await cl.AskFileMessage(
@@ -104,19 +104,19 @@ async def start():
         msg = cl.Message(content=f"Processing `{text_file.name}`...")
         await msg.send()
 
-        # Save file to upload directory to enable PDF page links (e.g., /upload/file.pdf#page=5)
+        # Save file to public directory to enable PDF page links (e.g., /public/file.pdf#page=5)
         # This is necessary because Chainlit's temporary file paths are not web-accessible
         # Files will be cleaned up when the app exits
-        upload_path = Path("upload") / text_file.name
-        with open(upload_path, "wb") as f:
+        public_path = Path("public") / text_file.name
+        with open(public_path, "wb") as f:
             with open(text_file.path, "rb") as src:
                 f.write(src.read())
 
         # Store the filename in session for later use
         cl.user_session.set("current_file_name", text_file.name)
 
-        # Use the upload path for Gemini upload
-        upload_path = upload_path
+        # Use the public path for Gemini upload
+        upload_path = public_path
 
         try:
             # Upload to Gemini
@@ -169,9 +169,9 @@ async def main(message: cl.Message):
                 msg = cl.Message(content=f"Processing `{element.name}`...")
                 await msg.send()
 
-                # Save file to upload directory to enable PDF page links
-                upload_path = Path("upload") / element.name
-                with open(upload_path, "wb") as f:
+                # Save file to public directory to enable PDF page links
+                public_path = Path("public") / element.name
+                with open(public_path, "wb") as f:
                     with open(element.path, "rb") as src:
                         f.write(src.read())
 
@@ -179,7 +179,7 @@ async def main(message: cl.Message):
                 current_file_name = element.name
                 cl.user_session.set("current_file_name", current_file_name)
 
-                upload_path = upload_path
+                upload_path = public_path
 
                 try:
                     # Upload to Gemini
