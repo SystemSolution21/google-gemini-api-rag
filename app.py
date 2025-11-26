@@ -16,7 +16,7 @@ import rag_manager
 
 
 def cleanup_public_folder():
-    """Delete the public folder and all its contents when the app exits."""
+    """Delete the public folder and all its contents."""
     public_path = Path("public")
     if public_path.exists():
         try:
@@ -26,8 +26,11 @@ def cleanup_public_folder():
             print(f"Warning: Could not clean up public folder: {e}")
 
 
-# Register cleanup function to run when the app exits
+# Register cleanup function to run when the app exits (best effort)
 atexit.register(cleanup_public_folder)
+
+# Clean up on startup to remove any leftovers from previous crashes (reliable)
+cleanup_public_folder()
 
 
 def format_response_with_citations(
@@ -101,6 +104,11 @@ async def start():
     if files_uploaded:
         text_file = files_uploaded[0]
 
+        # Ensure path is valid
+        if not text_file.path:
+            await cl.Message(content="Error: Uploaded file has no path.").send()
+            return
+
         msg = cl.Message(content=f"Processing `{text_file.name}`...")
         await msg.send()
 
@@ -165,7 +173,11 @@ async def main(message: cl.Message):
     if message.elements:
         for element in message.elements:
             # Check if it's a file we can process
-            if element.mime and ("pdf" in element.mime or "text" in element.mime):
+            if (
+                element.mime
+                and ("pdf" in element.mime or "text" in element.mime)
+                and element.path
+            ):
                 msg = cl.Message(content=f"Processing `{element.name}`...")
                 await msg.send()
 
