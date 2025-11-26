@@ -1,21 +1,26 @@
 # imports built-in modules
 import os
+import sys
 import time
 from pathlib import Path
+from typing import List, Optional
 
 # imports third-party modules
 import google.generativeai as genai
 from dotenv import load_dotenv
+from google.generativeai.generative_models import ChatSession
+from google.generativeai.types import File as GeminiFile
 
 # load environment variables
 load_dotenv()
 
 # Configure Gemini API
-api_key = os.getenv("GOOGLE_API_KEY")
-if not api_key:
+api_key: str | None = os.getenv("GOOGLE_API_KEY", None)
+if api_key is None:
     print("Warning: GOOGLE_API_KEY not found in environment variables.")
-
-genai.configure(api_key=api_key)
+    sys.exit(1)
+else:
+    genai.configure(api_key=api_key)
 
 # Configuration for the model
 generation_config = {
@@ -27,7 +32,7 @@ generation_config = {
 }
 
 
-def upload_file(file_path: str, display_name: str = None):
+def upload_file(file_path: str, display_name: Optional[str] = None) -> GeminiFile:
     """Uploads a file to Gemini API."""
     if not display_name:
         display_name = Path(file_path).name
@@ -38,22 +43,22 @@ def upload_file(file_path: str, display_name: str = None):
     return file_ref
 
 
-def wait_for_files_active(files):
+def wait_for_files_active(files: List[GeminiFile]) -> None:
     """Waits for the given files to be active."""
     print("Waiting for file processing...")
     for name in (file.name for file in files):
-        file = genai.get_file(name)
-        while file.state.name == "PROCESSING":
+        file_obj = genai.get_file(name)
+        while file_obj.state.name == "PROCESSING":
             print(".", end="", flush=True)
 
             time.sleep(2)
-            file = genai.get_file(name)
-        if file.state.name != "ACTIVE":
-            raise Exception(f"File {file.name} failed to process")
+            file_obj = genai.get_file(name)
+        if file_obj.state.name != "ACTIVE":
+            raise Exception(f"File {file_obj.name} failed to process")
     print("...all files ready")
 
 
-def create_chat_session(files=None):
+def create_chat_session(files: Optional[List[GeminiFile]] = None) -> ChatSession:
     """Creates a chat session with the given files in history/context."""
 
     model = genai.GenerativeModel(
@@ -61,7 +66,8 @@ def create_chat_session(files=None):
         generation_config=generation_config,
         system_instruction="""You are a helpful assistant. You have access to the provided files. 
         Answer questions based on the information in these files. 
-        Always cite your sources using the provided context.""",
+        When citing sources, use the format (p. X) for page references, where X is the page number.
+        Format your responses in a clear, readable style that works well with markdown rendering.""",
     )
 
     history = []

@@ -1,7 +1,13 @@
+import atexit
 import os
+import re
+import shutil
 from pathlib import Path
+from typing import Optional
 
 import chainlit as cl
+from google.generativeai.generative_models import ChatSession
+from google.generativeai.types import GenerateContentResponse
 
 import rag_manager
 
@@ -9,9 +15,53 @@ import rag_manager
 # In Chainlit, we usually store session data in cl.user_session
 
 
-def format_response_with_citations(response):
+def cleanup_upload_folder():
+    """Delete the upload folder and all its contents when the app exits."""
+    upload_path = Path("upload")
+    if upload_path.exists():
+        try:
+            shutil.rmtree(upload_path)
+            print("✓ Cleaned up upload folder")
+        except Exception as e:
+            print(f"Warning: Could not clean up upload folder: {e}")
+
+
+# Register cleanup function to run when the app exits
+atexit.register(cleanup_upload_folder)
+
+
+def format_response_with_citations(
+    response: GenerateContentResponse, source_document_name: Optional[str] = None
+) -> str:
     """Helper to format the response text with citations."""
     answer_text = response.text
+
+    # Link page citations if source document is provided
+    if source_document_name:
+        # Pattern for ", p. X)" - inline citations with quotes
+        answer_text = re.sub(
+            r'",\s*p\.\s*(\d+)\)',
+            rf'", [p. \1](/upload/{source_document_name}#page=\1))',
+            answer_text,
+        )
+        # Pattern for (p. X) - standalone citations
+        answer_text = re.sub(
+            r"\(p\.\s*(\d+)\)",
+            rf"([p. \1](/upload/{source_document_name}#page=\1))",
+            answer_text,
+        )
+        # Pattern for ", p. X-Y)" - inline range citations
+        answer_text = re.sub(
+            r'",\s*p\.\s*(\d+)-(\d+)\)',
+            rf'", [p. \1-\2](/upload/{source_document_name}#page=\1))',
+            answer_text,
+        )
+        # Pattern for (p. X-Y) - standalone range citations
+        answer_text = re.sub(
+            r"\(p\.\s*(\d+)-(\d+)\)",
+            rf"([p. \1-\2](/upload/{source_document_name}#page=\1))",
+            answer_text,
+        )
 
     citations = []
     if response.candidates and response.candidates[0].citation_metadata:
@@ -30,8 +80,6 @@ def format_response_with_citations(response):
                         f" (Indexes: {source.start_index}-{source.end_index})"
                     )
 
-                # No local file path appended as files are temporary and not stored in session.
-
                 citations.append(citation_text)
 
     return answer_text + "\n".join(citations)
@@ -39,9 +87,8 @@ def format_response_with_citations(response):
 
 @cl.on_chat_start
 async def start():
-    # Ensure uploads directory exists
-    os.makedirs("uploads", exist_ok=True)
-    cl.user_session.set("uploaded_files", {})
+    # Ensure upload directory exists for serving PDF files (temporary storage)
+    os.makedirs("upload", exist_ok=True)
 
     # Ask user to upload a file
     files_uploaded = await cl.AskFileMessage(
@@ -57,16 +104,19 @@ async def start():
         msg = cl.Message(content=f"Processing `{text_file.name}`...")
         await msg.send()
 
-        # Save file to a temporary location
-        import tempfile
+        # Save file to upload directory to enable PDF page links (e.g., /upload/file.pdf#page=5)
+        # This is necessary because Chainlit's temporary file paths are not web-accessible
+        # Files will be cleaned up when the app exits
+        upload_path = Path("upload") / text_file.name
+        with open(upload_path, "wb") as f:
+            with open(text_file.path, "rb") as src:
+                f.write(src.read())
 
-        with open(text_file.path, "rb") as src:
-            with tempfile.NamedTemporaryFile(
-                delete=False, suffix=Path(text_file.name).suffix
-            ) as tmp:
-                tmp.write(src.read())
-                upload_path = Path(tmp.name)
-        # No session storage of uploaded files; they are temporary.
+        # Store the filename in session for later use
+        cl.user_session.set("current_file_name", text_file.name)
+
+        # Use the upload path for Gemini upload
+        upload_path = upload_path
 
         try:
             # Upload to Gemini
@@ -83,7 +133,7 @@ async def start():
             # Auto-Summary
             initial_prompt = f"Analyze the uploaded document '{text_file.name}'. List the filename, and provide a brief summary with 3-5 citations pointing to key sections. Include page numbers if inferred."
             response = chat_session.send_message(initial_prompt)
-            final_response = format_response_with_citations(response)
+            final_response = format_response_with_citations(response, text_file.name)
 
             msg.content = final_response
             await msg.update()
@@ -91,12 +141,12 @@ async def start():
         except Exception as e:
             msg.content = f"Error processing file: {str(e)}"
             await msg.update()
-        # No finally block to delete files - we keep them now
 
 
 @cl.on_message
 async def main(message: cl.Message):
-    chat_session = cl.user_session.get("chat_session")
+    chat_session: Optional[ChatSession] = cl.user_session.get("chat_session")
+    current_file_name: Optional[str] = cl.user_session.get("current_file_name")
 
     if not chat_session:
         await cl.Message(
@@ -119,16 +169,17 @@ async def main(message: cl.Message):
                 msg = cl.Message(content=f"Processing `{element.name}`...")
                 await msg.send()
 
-                # Save file to a temporary location
-                import tempfile
+                # Save file to upload directory to enable PDF page links
+                upload_path = Path("upload") / element.name
+                with open(upload_path, "wb") as f:
+                    with open(element.path, "rb") as src:
+                        f.write(src.read())
 
-                with open(element.path, "rb") as src:
-                    with tempfile.NamedTemporaryFile(
-                        delete=False, suffix=Path(element.name).suffix
-                    ) as tmp:
-                        tmp.write(src.read())
-                        upload_path = Path(tmp.name)
-                # No session storage of uploaded files; they are temporary.
+                # Update current file name
+                current_file_name = element.name
+                cl.user_session.set("current_file_name", current_file_name)
+
+                upload_path = upload_path
 
                 try:
                     # Upload to Gemini
@@ -143,7 +194,6 @@ async def main(message: cl.Message):
                     await cl.Message(
                         content=f"Error processing {element.name}: {str(e)}"
                     ).send()
-                # No finally block - keep files
 
     # If we have content (text or files), send it
     if gemini_content:
@@ -153,15 +203,9 @@ async def main(message: cl.Message):
                 "Analyze the uploaded document(s). List the filename, and provide a brief summary with 3-5 citations pointing to key sections. Include page numbers if inferred."
             )
 
-            # If we reused the 'msg' from upload, we should update it.
-            # If there was no upload (just text), we create a new message.
-            # But here we know we have elements if we are in this block.
-            # Let's assume 'msg' exists if we uploaded files.
-            # However, gemini_content might have text too.
-
         try:
             response = chat_session.send_message(gemini_content)
-            final_response = format_response_with_citations(response)
+            final_response = format_response_with_citations(response, current_file_name)
 
             # If we had a 'msg' from file processing (and no text query), we could update it.
             # But if the user sent text + file, the 'msg' was "Processing file...".
