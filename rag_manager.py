@@ -1,3 +1,5 @@
+# rag_manager.py
+
 # imports built-in modules
 import os
 import sys
@@ -33,7 +35,21 @@ generation_config = types.GenerateContentConfig(
 
 
 def upload_file(file_path: str, display_name: Optional[str] = None) -> types.File:
-    """Uploads a file to Gemini API."""
+    """Upload a file to the Gemini API.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to the local file to be uploaded.
+    display_name : Optional[str], default None
+        Optional display name for the file in Gemini. If omitted, the
+        filename from ``file_path`` is used.
+
+    Returns
+    -------
+    types.File
+        A reference to the uploaded file returned by the Gemini client.
+    """
     if not display_name:
         display_name = Path(file_path).name
 
@@ -44,7 +60,22 @@ def upload_file(file_path: str, display_name: Optional[str] = None) -> types.Fil
 
 
 def wait_for_files_active(files: List[types.File]) -> None:
-    """Waits for the given files to be active."""
+    """Block until all provided files are processed and active.
+
+    The function polls the Gemini file status every two seconds until each
+    file transitions from ``PROCESSING`` to ``ACTIVE``. If a file fails to
+    become active, an exception is raised.
+
+    Parameters
+    ----------
+    files : List[types.File]
+        List of file references returned by :func:`upload_file`.
+
+    Raises
+    ------
+    Exception
+        If any file has no name or fails to reach the ``ACTIVE`` state.
+    """
     print("Waiting for file processing...")
     for file in files:
         if not file.name:
@@ -60,8 +91,23 @@ def wait_for_files_active(files: List[types.File]) -> None:
 
 
 def create_chat_session(files: Optional[List[types.File]] = None) -> chats.Chat:
-    """Creates a chat session with the given files in history/context."""
+    """Create a Gemini chat session with optional file context.
 
+    A system instruction is supplied to guide the assistant. If a list of
+    files is provided, they are added to the initial chat history as a
+    user message so that the model can reference them during the session.
+
+    Parameters
+    ----------
+    files : Optional[List[types.File]], default None
+        Files to include in the chat context. Each file must have a
+        ``uri`` and ``mime_type``.
+
+    Returns
+    -------
+    chats.Chat
+        A chat session object that can be used to send messages to Gemini.
+    """
     # Prepare system instruction
     system_instruction = """You are a helpful assistant. You have access to the provided files.
     Answer questions based on the information in these files.
