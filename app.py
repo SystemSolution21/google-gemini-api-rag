@@ -1,3 +1,14 @@
+# app.py
+"""
+This module implements a Chainlit chatbot that interacts with the Google Gemini
+RAG (Retrieval‑Augmented Generation) API. Users can upload text or PDF files,
+which are processed and stored temporarily in a `public` directory. The
+uploaded documents are then indexed by Gemini, and a chat session is created
+to answer user queries with citations pointing to relevant sections of the
+documents. The module also handles cleanup of the temporary public folder
+upon startup and exit.
+"""
+
 # imports built-in modules
 import atexit
 import os
@@ -13,12 +24,19 @@ from google.genai import chats, types
 # imports local modules
 import rag_manager
 
+
 # Global variable to store the chat session
 # In Chainlit, we usually store session data in cl.user_session
 
 
 def cleanup_public_folder():
-    """Delete the public folder and all its contents."""
+    """Delete the public folder and all its contents.
+
+    This function is called at startup to remove any leftover files from
+    previous runs and is also registered with :func:`atexit.register` to
+    ensure cleanup when the application exits. It prints a success message
+    or a warning if the removal fails.
+    """
     public_path = Path("public")
     if public_path.exists():
         try:
@@ -38,7 +56,25 @@ cleanup_public_folder()
 def format_response_with_citations(
     response: types.GenerateContentResponse, source_document_name: Optional[str] = None
 ) -> str:
-    """Helper to format the response text with citations."""
+    """Format Gemini's response text with citation links.
+
+    Parameters
+    ----------
+    response : types.GenerateContentResponse
+        The raw response object returned by Gemini.
+    source_document_name : Optional[str]
+        The filename of the source document to link citations to. If
+        provided, inline and standalone citation patterns in the
+        response text are replaced with Markdown links pointing to the
+        corresponding PDF page in the `public` directory.
+
+    Returns
+    -------
+    str
+        The formatted response text, including a **Citations** section
+        listing all citation metadata (source URI and index ranges) if
+        available.
+    """
     answer_text = response.text or ""
 
     # Link page citations if source document is provided
@@ -92,6 +128,13 @@ def format_response_with_citations(
 
 @cl.on_chat_start
 async def start():
+    """Handle the initial chat start event.
+
+    Creates the `public` directory, prompts the user to upload a file,
+    processes the uploaded file (saving it to `public`, uploading to Gemini,
+    and creating a chat session), and automatically generates a brief
+    summary of the document with citations.
+    """
     # Ensure public directory exists for serving PDF files (temporary storage)
     os.makedirs("public", exist_ok=True)
 
@@ -155,6 +198,13 @@ async def start():
 
 @cl.on_message
 async def main(message: cl.Message):
+    """Process user messages and file attachments.
+
+    Handles text queries, file uploads, and combines them into a single
+    Gemini request. If only a file is sent, it triggers an automatic
+    summary. The response is formatted with citations and sent back to
+    the user.
+    """
     chat_session: Optional[chats.Chat] = cl.user_session.get("chat_session")
     current_file_name: Optional[str] = cl.user_session.get("current_file_name")
 
