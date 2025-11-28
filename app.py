@@ -1,14 +1,16 @@
+# imports built-in modules
 import atexit
 import os
-import re
-import shutil
 from pathlib import Path
+import re
 from typing import Optional
+import shutil
 
+# imports third-party modules
 import chainlit as cl
-from google.generativeai.generative_models import ChatSession
-from google.generativeai.types import GenerateContentResponse
+from google.genai import chats, types
 
+# imports local modules
 import rag_manager
 
 # Global variable to store the chat session
@@ -34,13 +36,13 @@ cleanup_public_folder()
 
 
 def format_response_with_citations(
-    response: GenerateContentResponse, source_document_name: Optional[str] = None
+    response: types.GenerateContentResponse, source_document_name: Optional[str] = None
 ) -> str:
     """Helper to format the response text with citations."""
-    answer_text = response.text
+    answer_text = response.text or ""
 
     # Link page citations if source document is provided
-    if source_document_name:
+    if source_document_name and answer_text:
         # Pattern for ", p. X)" - inline citations with quotes
         answer_text = re.sub(
             r'",\s*p\.\s*(\d+)\)',
@@ -68,10 +70,10 @@ def format_response_with_citations(
 
     citations = []
     if response.candidates and response.candidates[0].citation_metadata:
-        citation_sources = response.candidates[0].citation_metadata.citation_sources
-        if citation_sources:
+        citation_metadata = response.candidates[0].citation_metadata
+        if citation_metadata.citations:
             citations.append("\n\n**Citations:**")
-            for i, source in enumerate(citation_sources):
+            for i, source in enumerate(citation_metadata.citations):
                 citation_text = f"{i + 1}. "
                 if source.uri:
                     citation_text += f"[{source.uri}]({source.uri})"
@@ -140,7 +142,7 @@ async def start():
 
             # Auto-Summary
             initial_prompt = f"Analyze the uploaded document '{text_file.name}'. List the filename, and provide a brief summary with 3-5 citations pointing to key sections. Include page numbers if inferred."
-            response = chat_session.send_message(initial_prompt)
+            response = chat_session.send_message(message=initial_prompt)
             final_response = format_response_with_citations(response, text_file.name)
 
             msg.content = final_response
@@ -153,7 +155,7 @@ async def start():
 
 @cl.on_message
 async def main(message: cl.Message):
-    chat_session: Optional[ChatSession] = cl.user_session.get("chat_session")
+    chat_session: Optional[chats.Chat] = cl.user_session.get("chat_session")
     current_file_name: Optional[str] = cl.user_session.get("current_file_name")
 
     if not chat_session:
@@ -216,7 +218,8 @@ async def main(message: cl.Message):
             )
 
         try:
-            response = chat_session.send_message(gemini_content)
+            # In the new SDK, send_message takes a 'message' parameter
+            response = chat_session.send_message(message=gemini_content)
             final_response = format_response_with_citations(response, current_file_name)
 
             # If we had a 'msg' from file processing (and no text query), we could update it.
