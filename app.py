@@ -12,10 +12,12 @@ upon startup and exit.
 # imports built-in modules
 import atexit
 import os
-from pathlib import Path
 import re
-from typing import Optional
 import shutil
+import signal
+import sys
+from pathlib import Path
+from typing import Optional
 
 # imports third-party modules
 import chainlit as cl
@@ -25,11 +27,7 @@ from google.genai import chats, types
 import rag_manager
 
 
-# Global variable to store the chat session
-# In Chainlit, we usually store session data in cl.user_session
-
-
-def cleanup_public_folder():
+def cleanup_public_folder() -> None:
     """Delete the public folder and all its contents.
 
     This function is called at startup to remove any leftover files from
@@ -46,8 +44,52 @@ def cleanup_public_folder():
             print(f"Warning: Could not clean up public folder: {e}")
 
 
-# Register cleanup function to run when the app exits (best effort)
+def signal_handler(sig, frame) -> None:
+    """Handle termination signals (SIGINT, SIGTERM) to ensure cleanup.
+
+    This function is called when the application receives a termination
+    signal (e.g., Ctrl+C). It performs cleanup and then exits gracefully.
+
+    Parameters
+    ----------
+    sig : int
+        The signal number received.
+    frame : frame
+        The current stack frame (unused).
+    """
+    print("\n🛑 Received termination signal, cleaning up...")
+    cleanup_public_folder()
+    sys.exit(0)
+
+
+# Register cleanup function to run when the app exits normally (best effort)
 atexit.register(cleanup_public_folder)
+
+# Register signal handlers for Ctrl+C (SIGINT) and termination (SIGTERM)
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+
+@cl.on_stop
+def on_stop() -> None:
+    """Handle Chainlit session stop event.
+
+    This is called when a user's chat session ends (e.g., browser tab closed,
+    session timeout). Note: This cleans up per-session, not the entire public folder.
+    """
+    print("🔄 Chat session stopped")
+    # Note: We don't clean the entire public folder here as other sessions might be active
+
+
+@cl.on_chat_end
+async def on_chat_end() -> None:
+    """Handle Chainlit chat end event.
+
+    This is called when the chat explicitly ends. Similar to on_stop but async.
+    """
+    print("👋 Chat session ended")
+    # Note: We don't clean the entire public folder here as other sessions might be active
+
 
 # Clean up on startup to remove any leftovers from previous crashes (reliable)
 cleanup_public_folder()
