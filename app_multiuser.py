@@ -89,6 +89,35 @@ async def on_new_chat(action: cl.Action):
                 await cl.Message(content="❌ Failed to create chat session").send()
 
 
+@cl.action_callback("load_chat")
+async def on_load_chat(action: cl.Action):
+    """Load an existing chat session."""
+    session_id = action.payload.get("session_id")
+    user_id = auth.get_current_user_id()
+
+    if not session_id or not user_id:
+        await cl.Message(content="❌ Invalid session").send()
+        return
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        # Verify session belongs to user
+        session = await ChatSession.get_by_id(conn, session_id, user_id)
+        if not session:
+            await cl.Message(content="❌ Session not found").send()
+            return
+
+        # Set active session
+        cl.user_session.set("chat_session_id", session_id)
+        cl.user_session.set("chat_title", session["title"])
+
+        # Load messages and documents
+        messages = await Message.list_by_session(conn, session_id)
+        documents = await Document.list_by_session(conn, session_id)
+
+        await cl.Message(content=f"✅ Loaded chat: **{session['title']}**").send()
+
+
 @cl.action_callback("list_chats")
 async def on_list_chats(action: cl.Action):
     """Handle listing user's chat sessions."""
@@ -138,7 +167,7 @@ async def on_delete_chat(action: cl.Action):
     # Then delete from database
     pool = await get_pool()
     async with pool.acquire() as conn:
-        if isinstance(session_id, int) and isinstance(user_id, int):
+        if session_id and user_id:
             await ChatSession.delete(conn, session_id, user_id)
 
 
@@ -340,32 +369,3 @@ def on_stop():
 async def on_chat_end():
     """Handle chat end."""
     print("👋 Chat session ended")
-
-
-@cl.action_callback("load_chat")
-async def on_load_chat(action: cl.Action):
-    """Load an existing chat session."""
-    session_id = action.payload.get("session_id")
-    user_id = auth.get_current_user_id()
-
-    if not session_id or not user_id:
-        await cl.Message(content="❌ Invalid session").send()
-        return
-
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        # Verify session belongs to user
-        session = await ChatSession.get_by_id(conn, session_id, user_id)
-        if not session:
-            await cl.Message(content="❌ Session not found").send()
-            return
-
-        # Set active session
-        cl.user_session.set("chat_session_id", session_id)
-        cl.user_session.set("chat_title", session["title"])
-
-        # Load messages and documents
-        messages = await Message.list_by_session(conn, session_id)
-        documents = await Document.list_by_session(conn, session_id)
-
-        await cl.Message(content=f"✅ Loaded chat: **{session['title']}**").send()
