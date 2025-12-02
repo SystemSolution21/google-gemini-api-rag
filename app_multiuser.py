@@ -115,7 +115,42 @@ async def on_load_chat(action: cl.Action):
         messages = await Message.list_by_session(conn, session_id)
         documents = await Document.list_by_session(conn, session_id)
 
+        # Recreate Gemini chat session with documents
+        if documents:
+            # Recreate Gemini files from stored URIs
+            gemini_files = []
+            for doc in documents:
+                if doc["gemini_file_uri"] and doc["gemini_file_name"]:
+                    # Create file object from stored metadata
+                    gemini_file = types.File(
+                        name=doc["gemini_file_name"],
+                        uri=doc["gemini_file_uri"],
+                        mime_type=doc["mime_type"],
+                    )
+                    gemini_files.append(gemini_file)
+
+            if gemini_files:
+                chat_session = rag_manager.create_chat_session(gemini_files)
+                cl.user_session.set("gemini_chat", chat_session)
+
         await cl.Message(content=f"✅ Loaded chat: **{session['title']}**").send()
+
+        # Optionally display recent messages
+        if messages:
+            recent_messages = messages[-3:]  # Show last 3 messages
+            history_text = "**Recent conversation:**\n\n"
+            for msg in recent_messages:
+                role_icon = "👤" if msg["role"] == "user" else "🤖"
+                content_preview = (
+                    msg["content"][:100] + "..."
+                    if len(msg["content"]) > 100
+                    else msg["content"]
+                )
+                history_text += (
+                    f"{role_icon} **{msg['role'].title()}:** {content_preview}\n\n"
+                )
+
+            await cl.Message(content=history_text).send()
 
 
 @cl.action_callback("list_chats")
@@ -346,8 +381,13 @@ async def main(message: cl.Message):
         async with pool.acquire() as conn:
             await Message.create(conn, chat_session_id, "assistant", response_text)
 
+        # Get document filename for citations
+        async with pool.acquire() as conn:
+            documents = await Document.list_by_session(conn, chat_session_id)
+            doc_filename = documents[0]["filename"] if documents else None
+
         # Format and send response
-        final_response = format_response_with_citations(response)
+        final_response = format_response_with_citations(response, doc_filename)
         await cl.Message(content=final_response).send()
 
     except Exception as e:
