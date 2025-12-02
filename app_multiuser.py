@@ -25,11 +25,46 @@ from database import get_pool
 from models import ChatSession, Document, Message
 
 
-# Initialize database on startup
+@cl.set_chat_profiles
+async def chat_profile(current_user: cl.User | None, current_chat_profile: str | None):
+    """Set up chat profiles for recent chats."""
+    user_id = current_user.identifier if current_user else None
+    if not user_id:
+        return []
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        sessions = await ChatSession.list_by_user(conn, int(user_id))
+
+        profiles = [
+            cl.ChatProfile(
+                name="new_chat",
+                markdown_description="Create a new chat session",
+                icon="📝",
+            ),
+            cl.ChatProfile(
+                name="manage_chats",
+                markdown_description="Manage all your chats (rename, delete)",
+                icon="⚙️",
+            ),
+        ]
+
+        # Add recent chats as profiles
+        for session in sessions[:5]:  # Show 5 most recent
+            profiles.append(
+                cl.ChatProfile(
+                    name=f"chat_{session['id']}",
+                    markdown_description=f"**{session['title']}**\n{session['updated_at'].strftime('%Y-%m-%d %H:%M')}",
+                    icon="💬",
+                )
+            )
+
+        return profiles
+
+
 @cl.on_chat_start
 async def start():
     """Handle the initial chat start event with authentication and session management."""
-
     # Get authenticated user
     user = cl.user_session.get("user")
     if not user or not user.metadata:
@@ -38,124 +73,58 @@ async def start():
 
     username = user.metadata.get("username")
 
-    # Welcome message
-    await cl.Message(
-        content=f"👋 Welcome back, **{username}**!\n\nWhat would you like to do?"
-    ).send()
+    # Check which profile was selected
+    chat_profile = cl.user_session.get("chat_profile")
 
-    # Show chat session options
-    actions = [
-        cl.Action(name="new_chat", payload={}, label="📝 New Chat"),
-        cl.Action(name="list_chats", payload={}, label="📋 My Chats"),
-    ]
+    if chat_profile and chat_profile.startswith("chat_"):
+        # Load specific chat
+        session_id = int(chat_profile.replace("chat_", ""))
+        await load_chat_by_id(session_id)
 
-    await cl.Message(content="Choose an option:", actions=actions).send()
+    elif chat_profile == "new_chat":
+        # Create new chat
+        await create_new_chat_flow()
+
+    elif chat_profile == "manage_chats":
+        # Show management interface
+        await show_chat_management()
+
+    else:
+        # Default welcome
+        await cl.Message(
+            content=f"👋 Welcome back, **{username}**!\n\nSelect a chat from the dropdown above or create a new one."
+        ).send()
 
 
-@cl.action_callback("new_chat")
-async def on_new_chat(action: cl.Action):
-    """Handle new chat creation."""
+async def create_new_chat_flow():
+    """Create a new chat session and set it as active."""
     user_id = auth.get_current_user_id()
     if not user_id:
         await cl.Message(content="❌ Not authenticated").send()
         return
 
-    # Ask for chat title
-    res = await cl.AskUserMessage(
-        content="Enter a title for your new chat:", timeout=60
-    ).send()
-
-    if res:
-        title = res.get("output", "").strip()
-        if not title:
-            title = "Untitled Chat"
-
-        # Create chat session in database
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            session_id = await ChatSession.create(conn, user_id, title)
-
-            if session_id:
-                cl.user_session.set("chat_session_id", session_id)
-                cl.user_session.set("chat_title", title)
-
-                await cl.Message(
-                    content=f"✅ Created new chat: **{title}**\n\nYou can now upload documents or start asking questions!"
-                ).send()
-
-                # Prompt for file upload
-                await prompt_file_upload()
-            else:
-                await cl.Message(content="❌ Failed to create chat session").send()
-
-
-@cl.action_callback("load_chat")
-async def on_load_chat(action: cl.Action):
-    """Load an existing chat session."""
-    session_id = action.payload.get("session_id")
-    user_id = auth.get_current_user_id()
-
-    if not session_id or not user_id:
-        await cl.Message(content="❌ Invalid session").send()
-        return
-
+    # Create new chat session in database
     pool = await get_pool()
     async with pool.acquire() as conn:
-        # Verify session belongs to user
-        session = await ChatSession.get_by_id(conn, session_id, user_id)
-        if not session:
-            await cl.Message(content="❌ Session not found").send()
+        session_id = await ChatSession.create(conn, user_id, "New Chat")
+        if not session_id:
+            await cl.Message(content="❌ Failed to create chat session").send()
             return
 
-        # Set active session
-        cl.user_session.set("chat_session_id", session_id)
-        cl.user_session.set("chat_title", session["title"])
+    # Set active session
+    cl.user_session.set("chat_session_id", session_id)
+    cl.user_session.set("chat_title", "New Chat")
 
-        # Load messages and documents
-        messages = await Message.list_by_session(conn, session_id)
-        documents = await Document.list_by_session(conn, session_id)
+    await cl.Message(
+        content="🆕 **New chat created!**\n\nYou can start chatting now or upload a file."
+    ).send()
 
-        # Recreate Gemini chat session with documents
-        if documents:
-            # Recreate Gemini files from stored URIs
-            gemini_files = []
-            for doc in documents:
-                if doc["gemini_file_uri"] and doc["gemini_file_name"]:
-                    # Create file object from stored metadata
-                    gemini_file = types.File(
-                        name=doc["gemini_file_name"],
-                        uri=doc["gemini_file_uri"],
-                        mime_type=doc["mime_type"],
-                    )
-                    gemini_files.append(gemini_file)
-
-            if gemini_files:
-                chat_session = rag_manager.create_chat_session(gemini_files)
-                cl.user_session.set("gemini_chat", chat_session)
-
-        await cl.Message(content=f"✅ Loaded chat: **{session['title']}**").send()
-
-        # Optionally display recent messages
-        if messages:
-            recent_messages = messages[-3:]  # Show last 3 messages
-            history_text = "**Recent conversation:**\n\n"
-            for msg in recent_messages:
-                role_icon = "👤" if msg["role"] == "user" else "🤖"
-                content_preview = (
-                    msg["content"][:100] + "..."
-                    if len(msg["content"]) > 100
-                    else msg["content"]
-                )
-                history_text += (
-                    f"{role_icon} **{msg['role'].title()}:** {content_preview}\n\n"
-                )
-
-            await cl.Message(content=history_text).send()
+    # Optionally prompt for file upload
+    await prompt_file_upload()
 
 
-@cl.action_callback("list_chats")
-async def on_list_chats(action: cl.Action):
-    """Handle listing user's chat sessions."""
+async def show_chat_management():
+    """Show chat management interface with rename/delete options."""
     user_id = auth.get_current_user_id()
     if not user_id:
         await cl.Message(content="❌ Not authenticated").send()
@@ -171,21 +140,85 @@ async def on_list_chats(action: cl.Action):
             ).send()
             return
 
-        # Create action buttons for each session
+        # Create management actions for each session
         session_actions = []
-        session_list = "**Your Chat Sessions:**\n\n"
+        session_list = "⚙️ **Chat Management**\n\n"
 
-        for i, session in enumerate(sessions[:10], 1):  # Limit to 10 most recent
+        for i, session in enumerate(sessions[:10], 1):
             session_list += f"{i}. **{session['title']}** - {session['updated_at'].strftime('%Y-%m-%d %H:%M')}\n"
+
+            # Load action
             session_actions.append(
                 cl.Action(
-                    name="load_chat",  # Remove the dynamic part
+                    name="load_chat",
                     payload={"session_id": session["id"]},
-                    label=f"Load: {session['title'][:30]}",
+                    label=f"📂 Load: {session['title'][:20]}",
+                )
+            )
+
+            # Rename action
+            session_actions.append(
+                cl.Action(
+                    name="rename_chat",
+                    payload={
+                        "session_id": session["id"],
+                        "current_title": session["title"],
+                    },
+                    label=f"✏️ Rename: {session['title'][:15]}",
+                )
+            )
+
+            # Delete action
+            session_actions.append(
+                cl.Action(
+                    name="delete_chat",
+                    payload={"session_id": session["id"], "title": session["title"]},
+                    label=f"🗑️ Delete: {session['title'][:15]}",
                 )
             )
 
         await cl.Message(content=session_list, actions=session_actions).send()
+
+
+async def load_chat_by_id(session_id: int):
+    """Load a specific chat by ID."""
+    user_id = auth.get_current_user_id()
+    if not user_id:
+        await cl.Message(content="❌ Not authenticated").send()
+        return
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        session = await ChatSession.get_by_id(conn, session_id, user_id)
+        if not session:
+            await cl.Message(content="❌ Session not found").send()
+            return
+
+        # Set active session
+        cl.user_session.set("chat_session_id", session_id)
+        cl.user_session.set("chat_title", session["title"])
+
+        # Load messages and documents
+        _messages = await Message.list_by_session(conn, session_id)
+        documents = await Document.list_by_session(conn, session_id)
+
+        # Recreate Gemini chat session with documents
+        if documents:
+            gemini_files = []
+            for doc in documents:
+                if doc["gemini_file_uri"] and doc["gemini_file_name"]:
+                    gemini_file = types.File(
+                        name=doc["gemini_file_name"],
+                        uri=doc["gemini_file_uri"],
+                        mime_type=doc["mime_type"],
+                    )
+                    gemini_files.append(gemini_file)
+
+            if gemini_files:
+                chat_session = rag_manager.create_chat_session(gemini_files)
+                cl.user_session.set("gemini_chat", chat_session)
+
+        await cl.Message(content=f"✅ Loaded chat: **{session['title']}**").send()
 
 
 @cl.action_callback("delete_chat")
