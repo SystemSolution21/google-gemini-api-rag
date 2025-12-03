@@ -482,8 +482,8 @@ async def process_uploaded_file(file):
         msg.content = f"✅ Processed `{file.name}` successfully!"
         await msg.update()
 
-        # Auto-generate summary
-        initial_prompt = f"""Analyze the uploaded document '{file.name}'. 
+        # Auto-generate summary (internal prompt, not saved to database)
+        initial_prompt = f"""Analyze the uploaded document '{file.name}'.
                                 Provide a comprehensive summary using this format:
 
                                 1. Start with a brief overview paragraph
@@ -495,10 +495,9 @@ async def process_uploaded_file(file):
                                 Format the response with clear structure and include citations pointing to relevant sections."""
         response = chat_session.send_message(message=initial_prompt)
 
-        # Save messages to database
+        # Save only the assistant's summary response (not the internal prompt)
         pool = await get_pool()
         async with pool.acquire() as conn:
-            await Message.create(conn, chat_session_id, "user", initial_prompt)
             await Message.create(
                 conn, chat_session_id, "assistant", response.text or ""
             )
