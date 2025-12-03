@@ -255,6 +255,30 @@ class ChatSession:
         return [dict(s) for s in sessions]
 
     @staticmethod
+    async def count_by_user(conn: asyncpg.Connection, user_id: int) -> int:
+        """Count total chat sessions for a user (including deleted).
+
+        Parameters
+        ----------
+        conn : asyncpg.Connection
+            Database connection.
+        user_id : int
+            User ID.
+
+        Returns
+        -------
+        int
+            Total count of chat sessions.
+        """
+        result = await conn.fetchval(
+            """
+            SELECT COUNT(*) FROM chat_sessions WHERE user_id = $1
+            """,
+            user_id,
+        )
+        return result or 0
+
+    @staticmethod
     async def update_title(
         conn: asyncpg.Connection, session_id: int, user_id: int, new_title: str
     ) -> bool:
@@ -316,6 +340,57 @@ class ChatSession:
             user_id,
         )
         return result != "UPDATE 0"
+
+    @staticmethod
+    async def hard_delete(
+        conn: asyncpg.Connection, session_id: int, user_id: int
+    ) -> bool:
+        """Hard delete a chat session and all related records.
+
+        Deletes messages and documents first, then the chat session.
+
+        Parameters
+        ----------
+        conn : asyncpg.Connection
+            Database connection.
+        session_id : int
+            Chat session ID.
+        user_id : int
+            User ID for ownership verification.
+
+        Returns
+        -------
+        bool
+            True if deleted successfully, False otherwise.
+        """
+        # Verify ownership first
+        session = await conn.fetchrow(
+            "SELECT id FROM chat_sessions WHERE id = $1 AND user_id = $2",
+            session_id,
+            user_id,
+        )
+        if not session:
+            return False
+
+        # Delete documents first
+        await conn.execute(
+            "DELETE FROM documents WHERE chat_session_id = $1",
+            session_id,
+        )
+
+        # Delete messages
+        await conn.execute(
+            "DELETE FROM messages WHERE chat_session_id = $1",
+            session_id,
+        )
+
+        # Delete chat session
+        result = await conn.execute(
+            "DELETE FROM chat_sessions WHERE id = $1 AND user_id = $2",
+            session_id,
+            user_id,
+        )
+        return result != "DELETE 0"
 
 
 class Message:
