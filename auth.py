@@ -39,7 +39,7 @@ async def auth_callback(username: str, password: str) -> Optional[cl.User]:
 
         if user_data:
             return cl.User(
-                identifier=str(user_data["id"]),
+                identifier=user_data["username"],  # Use username instead of ID
                 metadata={
                     "username": user_data["username"],
                     "email": user_data["email"],
