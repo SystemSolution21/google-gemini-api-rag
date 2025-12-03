@@ -39,26 +39,14 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
     async with pool.acquire() as conn:
         sessions = await ChatSession.list_by_user(conn, user_id)
 
-        profiles = [
-            cl.ChatProfile(
-                name="new_chat",
-                markdown_description="Create a new chat session",
-                icon="📝",
-            ),
-            cl.ChatProfile(
-                name="manage_chats",
-                markdown_description="Manage all your chats (rename, delete)",
-                icon="⚙️",
-            ),
-        ]
+        profiles = []
 
-        # Add recent chats as profiles with unique names
+        # Add recent chats first - most recent is the default
         title_counts: dict[str, int] = {}
-        for session in sessions[:5]:  # Show 5 most recent
+        for idx, session in enumerate(sessions[:5]):  # Show 5 most recent
             title = session["title"]
             if title in title_counts:
                 title_counts[title] += 1
-                # Make unique by adding number suffix for duplicates
                 profile_name = f"{title} ({title_counts[title]})"
             else:
                 title_counts[title] = 1
@@ -69,8 +57,26 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
                     name=profile_name,
                     markdown_description=f"Session #{session['id']} - {session['updated_at'].strftime('%Y-%m-%d %H:%M')}",
                     icon="💬",
+                    default=(idx == 0),  # Most recent chat is default
                 )
             )
+
+        # Add management options after chats
+        profiles.append(
+            cl.ChatProfile(
+                name="new_chat",
+                markdown_description="Create a new chat session",
+                icon="📝",
+                default=(len(sessions) == 0),  # Default only if no chats exist
+            )
+        )
+        profiles.append(
+            cl.ChatProfile(
+                name="manage_chats",
+                markdown_description="Manage all your chats (rename, delete)",
+                icon="⚙️",
+            )
+        )
 
         return profiles
 
@@ -227,6 +233,10 @@ async def load_chat_by_profile_name(profile_name: str):
         await cl.Message(content="❌ Not authenticated").send()
         return
 
+    # Check if this chat is already loaded
+    current_session_id = cl.user_session.get("chat_session_id")
+    current_title = cl.user_session.get("chat_title")
+
     pool = await get_pool()
     async with pool.acquire() as conn:
         sessions = await ChatSession.list_by_user(conn, user_id)
@@ -243,6 +253,12 @@ async def load_chat_by_profile_name(profile_name: str):
                 expected_name = title
 
             if expected_name == profile_name:
+                # Check if this is already the active session
+                if current_session_id == session["id"]:
+                    await cl.Message(
+                        content=f"✅ Chat **{current_title}** is already active. You can continue chatting."
+                    ).send()
+                    return
                 await load_chat_by_id(session["id"])
                 return
 
@@ -299,20 +315,29 @@ async def load_chat_by_id(session_id: int):
             content=f"✅ Loaded chat: **{session['title']}**{doc_info}\n\n💬 You can continue your conversation."
         ).send()
 
-        # Display previous messages as chat history
+        # Display previous messages as chat history (skip internal prompts)
         if messages:
-            await cl.Message(content="---\n**Previous conversation:**").send()
+            display_messages = []
             for msg in messages:
-                author = "You" if msg["role"] == "user" else "Assistant"
-                # Truncate long messages for display
                 content = msg["content"]
-                if len(content) > 500:
-                    content = content[:500] + "..."
-                await cl.Message(
-                    content=f"**{author}:** {content}",
-                    author=msg["role"],
-                ).send()
-            await cl.Message(content="---\n**Continue chatting below:**").send()
+                # Skip auto-generated system prompts
+                if "Provide a comprehensive summary using this format:" in content:
+                    continue
+                display_messages.append(msg)
+
+            if display_messages:
+                await cl.Message(content="---\n**Previous conversation:**").send()
+                for msg in display_messages:
+                    author = "You" if msg["role"] == "user" else "Assistant"
+                    content = msg["content"]
+                    # Truncate long messages for display
+                    if len(content) > 500:
+                        content = content[:500] + "..."
+                    await cl.Message(
+                        content=f"**{author}:** {content}",
+                        author=msg["role"],
+                    ).send()
+                await cl.Message(content="---\n**Continue chatting below:**").send()
 
 
 @cl.action_callback("load_chat")
@@ -327,6 +352,11 @@ async def on_load_chat(action: cl.Action):
         cl.user_session.set("management_messages", [])
 
         await load_chat_by_id(int(session_id))
+
+        # Update chat_profile to match loaded chat title
+        chat_title = cl.user_session.get("chat_title")
+        if chat_title:
+            cl.user_session.set("chat_profile", chat_title)
 
 
 @cl.action_callback("rename_chat")
