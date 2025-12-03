@@ -14,6 +14,7 @@ permissions to gemini_user on the public schema.
 import os
 import subprocess
 import sys
+from urllib.parse import urlparse
 
 # imports third-party modules
 from dotenv import load_dotenv
@@ -33,24 +34,22 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO g
 def get_db_name_from_url() -> str:
     """Extract database name from DB_URL."""
     database_url = os.getenv("DB_URL", "")
-    if not database_url:
-        return "gemini_rag"
-    # Format: postgresql://user:pass@host:port/dbname
     try:
-        return database_url.split("/")[-1].split("?")[0]
-    except (IndexError, AttributeError):
+        parsed_url = urlparse(database_url)
+        # The path will be '/dbname', so we strip the leading '/'
+        db_name = parsed_url.path.lstrip("/")
+        return db_name or "gemini_rag"
+    except Exception:
         return "gemini_rag"
 
 
 def get_username_from_url() -> str:
     """Extract username from DB_URL."""
     database_url = os.getenv("DB_URL", "")
-    if not database_url:
-        return "gemini_user"
-    # Format: postgresql://user:pass@host:port/dbname
     try:
-        return database_url.split("://")[1].split(":")[0]
-    except (IndexError, AttributeError):
+        parsed_url = urlparse(database_url)
+        return parsed_url.username or "gemini_user"
+    except Exception:
         return "gemini_user"
 
 
