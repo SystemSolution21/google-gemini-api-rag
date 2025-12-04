@@ -55,7 +55,7 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
             profiles.append(
                 cl.ChatProfile(
                     name=profile_name,
-                    markdown_description=f"Session #{session['id']} - {session['updated_at'].strftime('%Y-%m-%d %H:%M')}",
+                    markdown_description=f"{session['updated_at'].strftime('%Y-%m-%d %H:%M')}",
                     icon="💬",
                     default=(idx == 0),  # Most recent chat is default
                 )
@@ -333,8 +333,10 @@ async def load_chat_by_id(session_id: int):
                     # Truncate long messages for display
                     if len(content) > 500:
                         content = content[:500] + "..."
+                    # Format timestamp for tooltip-style display
+                    timestamp = msg["created_at"].strftime("%Y-%m-%d %H:%M")
                     await cl.Message(
-                        content=f"**{author}:** {content}",
+                        content=f"**{author}** `{timestamp}`\n{content}",
                         author=msg["role"],
                     ).send()
                 await cl.Message(content="---\n**Continue chatting below:**").send()
