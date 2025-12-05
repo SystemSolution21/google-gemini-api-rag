@@ -31,6 +31,17 @@ async def auth_callback(username: str, password: str) -> Optional[cl.User]:
     Optional[cl.User]
         Chainlit User object if authentication successful, None otherwise.
     """
+    if password == "register":
+        # Create a temporary user object to trigger the registration flow
+        # in the on_chat_start callback.
+        return cl.User(
+            identifier=username,
+            metadata={
+                "registration_pending": True,
+                "email_from_login": username,  # Pass the email to the next step
+            },
+        )
+
     pool = await get_pool()
     async with pool.acquire() as conn:
         user_data = await User.authenticate(conn, username, password)
@@ -95,4 +106,3 @@ def get_current_username() -> Optional[str]:
     if user and user.metadata:
         return user.metadata.get("username")
     return None
-
