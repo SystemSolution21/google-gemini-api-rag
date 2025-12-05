@@ -9,7 +9,6 @@ Usage:
 """
 
 # imports built-in modules
-import logging
 import shutil
 import sys
 from pathlib import Path
@@ -25,14 +24,15 @@ def main():
 
     # Local module imports(avoid ruff E402 error)
     from src.config import config
+    from src.utils.logger import get_db_logger
 
     # Validate config before proceeding
     config.validate_or_exit()
 
-    # Use a console-only logger
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    logger = logging.getLogger(__name__)
+    # Database logger
+    logger = get_db_logger()
 
+    # Public directory
     public_dir = Path(config.PUBLIC_DIR)
 
     logger.warning(f"⚠️ This will delete the '{public_dir}' folder!")
