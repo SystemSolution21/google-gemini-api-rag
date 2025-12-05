@@ -95,11 +95,11 @@ def main():
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
         if result.returncode == 0:
-            logger.info("[OK] Permissions granted successfully!")
+            logger.info("✅ Permissions granted successfully!")
             logger.info(f"Output: {result.stdout}")
             logger.info("You can now run: python scripts/setup_db.py")
         else:
-            logger.error("[ERROR] Error granting permissions:")
+            logger.error("❌ Error granting permissions:")
             logger.error(result.stderr)
             logger.info("You may need to run the following command manually:")
             logger.info(
@@ -108,7 +108,7 @@ def main():
             sys.exit(1)
 
     except FileNotFoundError:
-        logger.error("[ERROR] psql command not found.")
+        logger.error("❌ psql command not found.")
         logger.info("Make sure PostgreSQL is installed and psql is in your PATH.")
         logger.info("Run the following command manually in psql:")
         logger.info(f"# Connect to database: psql -U postgres -d {db_name}")

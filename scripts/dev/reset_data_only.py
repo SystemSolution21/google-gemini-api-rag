@@ -25,11 +25,11 @@ logger = get_db_logger()
 
 async def reset_data_only():
     """Reset data but keep schema - safe for development."""
-    logger.warning("[!] WARNING: This will delete ALL data from the database!")
+    logger.warning("⚠️ This will delete ALL data from the database!")
     confirm = input("Are you sure? (type 'yes' to confirm): ").strip().lower()
 
     if confirm != "yes":
-        logger.info("[X] Aborted.")
+        logger.info("❌ Operation aborted by user.")
         return
 
     pool = await get_pool()
@@ -38,7 +38,7 @@ async def reset_data_only():
         await conn.execute(
             "TRUNCATE users, chat_sessions, messages, documents RESTART IDENTITY CASCADE"
         )
-        logger.info("[OK] All data reset, sequences restarted, schema preserved")
+        logger.info("✅ All data reset, sequences restarted, schema preserved")
 
 
 if __name__ == "__main__":

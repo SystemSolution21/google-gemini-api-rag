@@ -32,11 +32,11 @@ async def create_admin_user():
     password_confirm = input("Confirm password: ").strip()
 
     if password != password_confirm:
-        logger.error("[ERROR] Passwords do not match!")
+        logger.error("❌ Passwords do not match!")
         return False
 
     if not username or not email or not password:
-        logger.error("[ERROR] All fields are required!")
+        logger.error("❌ All fields are required!")
         return False
 
     pool = await get_pool()
@@ -44,11 +44,11 @@ async def create_admin_user():
         user_id = await User.create(conn, username, email, password)
 
         if user_id:
-            logger.info(f"[OK] Admin user created successfully! User ID: {user_id}")
+            logger.info(f"✅ Admin user created successfully! User ID: {user_id}")
             return True
         else:
             logger.error(
-                "[ERROR] Failed to create user. Username or email might already exist."
+                "❌ Failed to create user. Username or email might already exist."
             )
             return False
 
@@ -69,13 +69,13 @@ async def main():
         if create_admin == "y":
             await create_admin_user()
 
-        logger.info("[OK] Database setup complete!")
+        logger.info("✅ Database setup complete!")
         logger.info(
             "You can now run the application with: chainlit run app_multiuser.py -w"
         )
 
     except Exception as e:
-        logger.error(f"[ERROR] Error during setup: {e}")
+        logger.error(f"❌ Error during setup: {e}")
         sys.exit(1)
     finally:
         await close_pool()
