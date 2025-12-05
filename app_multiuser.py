@@ -9,7 +9,6 @@ and chat session management. This is an enhanced version of app.py with:
 """
 
 # imports built-in modules
-import re
 import shutil
 from pathlib import Path
 from typing import Any, Optional
@@ -19,10 +18,13 @@ import chainlit as cl
 from google.genai import types
 
 # imports local modules
-import auth
-import rag_manager
-from database import get_pool
-from models import ChatSession, Document, Message
+from src.auth import handlers as auth
+from src.core import rag_manager
+from src.db import ChatSession, Document, Message, get_pool
+from src.utils import format_response_with_citations
+from src.utils.logger import get_app_logger
+
+logger = get_app_logger()
 
 
 @cl.set_chat_profiles
@@ -504,7 +506,8 @@ async def process_uploaded_file(file):
                 conn, chat_session_id, "assistant", response.text or ""
             )
 
-        final_response = format_response_with_citations(response, file.name)
+        file_path = get_citation_file_path(file.name)
+        final_response = format_response_with_citations(response, file.name, file_path)
         await cl.Message(content=final_response).send()
 
     except Exception as e:
@@ -512,52 +515,28 @@ async def process_uploaded_file(file):
         await msg.update()
 
 
-def format_response_with_citations(
-    response: types.GenerateContentResponse, source_document_name: Optional[str] = None
-) -> str:
-    """Format Gemini's response text with citation links."""
-    answer_text = response.text or ""
+def get_citation_file_path(source_document_name: Optional[str]) -> Optional[str]:
+    """Get the full file path for citations in multi-user context.
 
-    if source_document_name and answer_text:
-        # Get current user and session info for correct path
-        user_id = auth.get_current_user_id()
-        chat_session_id = cl.user_session.get("chat_session_id")
+    Parameters
+    ----------
+    source_document_name : Optional[str]
+        The filename of the source document.
 
-        if user_id and chat_session_id:
-            file_path = f"{user_id}/{chat_session_id}/{source_document_name}"
+    Returns
+    -------
+    Optional[str]
+        Full path in format "user_id/session_id/filename" or None.
+    """
+    if not source_document_name:
+        return None
 
-            # Pattern for citations with correct multi-user path
-            answer_text = re.sub(
-                r'",\s*p\.\s*(\d+)\)',
-                rf'", [p. \1](/public/{file_path}#page=\1))',
-                answer_text,
-            )
-            answer_text = re.sub(
-                r"\(p\.\s*(\d+)\)",
-                rf"([p. \1](/public/{file_path}#page=\1))",
-                answer_text,
-            )
+    user_id = auth.get_current_user_id()
+    chat_session_id = cl.user_session.get("chat_session_id")
 
-    citations = []
-    if response.candidates and response.candidates[0].citation_metadata:
-        citation_metadata = response.candidates[0].citation_metadata
-        if citation_metadata.citations:
-            citations.append("\n\n**Citations:**")
-            for i, source in enumerate(citation_metadata.citations):
-                citation_text = f"{i + 1}. "
-                if source.uri:
-                    citation_text += f"[{source.uri}]({source.uri})"
-                else:
-                    citation_text += "Source Document"
-
-                if source.start_index is not None and source.end_index is not None:
-                    citation_text += (
-                        f" (Indexes: {source.start_index}-{source.end_index})"
-                    )
-
-                citations.append(citation_text)
-
-    return answer_text + "\n".join(citations)
+    if user_id and chat_session_id:
+        return f"{user_id}/{chat_session_id}/{source_document_name}"
+    return source_document_name
 
 
 async def process_pending_rename(message: cl.Message, pending_session_id: Any):
@@ -584,7 +563,9 @@ async def process_pending_rename(message: cl.Message, pending_session_id: Any):
             conn, int(pending_session_id), user_id, new_title
         )
         if success:
-            await cl.Message(content=f"✅ Chat renamed to: **{new_title}**").send()
+            await cl.Message(
+                content=f"✅ Chat renamed to: **{new_title}**\n\n🔄 *Refresh this chat page using the browser's reload button.*"
+            ).send()
         else:
             await cl.Message(content="❌ Failed to rename chat").send()
 
@@ -647,7 +628,10 @@ async def main(message: cl.Message):
                 doc_filename = documents[0]["filename"] if documents else None
 
             # Format and send response
-            final_response = format_response_with_citations(response, doc_filename)
+            file_path = get_citation_file_path(doc_filename)
+            final_response = format_response_with_citations(
+                response, doc_filename, file_path
+            )
             await cl.Message(content=final_response).send()
 
         except Exception as e:
@@ -662,10 +646,10 @@ async def main(message: cl.Message):
 @cl.on_stop
 def on_stop():
     """Handle session stop."""
-    print("🔄 Chat session stopped")
+    logger.info("Chat session stopped")
 
 
 @cl.on_chat_end
 async def on_chat_end():
     """Handle chat end."""
-    print("👋 Chat session ended")
+    logger.info("Chat session ended")

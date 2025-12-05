@@ -1,35 +1,32 @@
-# rag_manager.py
+# src/core/rag_manager.py
+"""
+Gemini RAG Manager.
 
-# imports built-in modules
-import os
-import sys
+Handles file uploads, processing, and chat session creation
+with the Google Gemini API.
+"""
+
 import time
 from pathlib import Path
 from typing import List, Optional
 
-# imports third-party modules
-from dotenv import load_dotenv
 from google import genai
 from google.genai import chats, types
 
-# load environment variables
-load_dotenv()
+from src.config import config
+from src.utils.logger import get_app_logger
 
-# Configure Gemini API - Create client
-api_key: str | None = os.getenv("GOOGLE_API_KEY", None)
-if api_key is None:
-    print("Warning: GOOGLE_API_KEY not found in environment variables.")
-    sys.exit(1)
+logger = get_app_logger()
 
-# Create the client with API key
-client = genai.Client(api_key=api_key)
+# Create the Gemini client with API key
+client = genai.Client(api_key=config.GOOGLE_API_KEY)
 
 # Configuration for the model
 generation_config = types.GenerateContentConfig(
-    temperature=1,
-    top_p=0.95,
-    top_k=64,
-    max_output_tokens=8192,
+    temperature=config.GEMINI_TEMPERATURE,
+    top_p=config.GEMINI_TOP_P,
+    top_k=config.GEMINI_TOP_K,
+    max_output_tokens=config.GEMINI_MAX_OUTPUT_TOKENS,
     response_mime_type="text/plain",
 )
 
@@ -53,9 +50,9 @@ def upload_file(file_path: str, display_name: Optional[str] = None) -> types.Fil
     if not display_name:
         display_name = Path(file_path).name
 
-    print(f"Uploading file: {display_name}...")
+    logger.info(f"Uploading file: {display_name}...")
     file_ref = client.files.upload(file=file_path)
-    print(f"Completed upload: {file_ref.uri}")
+    logger.info(f"Completed upload: {file_ref.uri}")
     return file_ref
 
 
@@ -76,18 +73,18 @@ def wait_for_files_active(files: List[types.File]) -> None:
     Exception
         If any file has no name or fails to reach the ``ACTIVE`` state.
     """
-    print("Waiting for file processing...")
+    logger.info("Waiting for file processing...")
     for file in files:
         if not file.name:
             raise Exception("File has no name")
         file_obj = client.files.get(name=str(file.name))
         while file_obj.state == "PROCESSING":
-            print(".", end="", flush=True)
+            logger.debug("File still processing...")
             time.sleep(2)
             file_obj = client.files.get(name=str(file.name))
         if file_obj.state != "ACTIVE":
             raise Exception(f"File {file_obj.name} failed to process")
-    print("...all files ready")
+    logger.info("All files ready")
 
 
 def create_chat_session(files: Optional[List[types.File]] = None) -> chats.Chat:
@@ -133,7 +130,7 @@ def create_chat_session(files: Optional[List[types.File]] = None) -> chats.Chat:
 
     # Create chat session with the new SDK
     chat = client.chats.create(
-        model="gemini-2.0-flash",
+        model=config.GEMINI_MODEL,
         config=types.GenerateContentConfig(
             system_instruction=system_instruction,
             temperature=generation_config.temperature,

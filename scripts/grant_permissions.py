@@ -1,10 +1,10 @@
-# grant_permissions.py
+# scripts/grant_permissions.py
 """
 Grant necessary schema permissions for PostgreSQL 15+.
 Run this script as postgres superuser before running setup_db.py.
 
 Usage:
-    python grant_permissions.py
+    python scripts/grant_permissions.py
 
 This script will prompt for postgres password and grant all necessary
 permissions to gemini_user on the public schema.
@@ -14,12 +14,21 @@ permissions to gemini_user on the public schema.
 import os
 import subprocess
 import sys
+from pathlib import Path
 from urllib.parse import urlparse
+
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 # imports third-party modules
 from dotenv import load_dotenv
 
+from src.utils.logger import get_db_logger
+
 load_dotenv()
+
+logger = get_db_logger()
 
 # SQL commands to grant permissions
 GRANT_SQL = """
@@ -55,19 +64,16 @@ def get_username_from_url() -> str:
 
 def main():
     """Main function to grant permissions."""
-    print("🔐 PostgreSQL Schema Permission Grant Tool")
-    print("=" * 50)
-    print()
-    print("This script grants necessary permissions for PostgreSQL 15+")
-    print("Run this BEFORE running setup_db.py")
-    print()
+    logger.info("[GRANT] PostgreSQL Schema Permission Grant Tool")
+    logger.info("=" * 50)
+    logger.info("This script grants necessary permissions for PostgreSQL 15+")
+    logger.info("Run this BEFORE running setup_db.py")
 
     db_name = get_db_name_from_url()
     db_user = get_username_from_url()
 
-    print(f"Database: {db_name}")
-    print(f"User to grant permissions: {db_user}")
-    print()
+    logger.info(f"Database: {db_name}")
+    logger.info(f"User to grant permissions: {db_user}")
 
     # Build the SQL with actual username
     sql = GRANT_SQL.replace("gemini_user", db_user)
@@ -83,41 +89,30 @@ def main():
         sql.strip().replace("\n", " "),
     ]
 
-    print("Running grant commands...")
-    print()
+    logger.info("Running grant commands...")
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
         if result.returncode == 0:
-            print("✅ Permissions granted successfully!")
-            print()
-            print("Output:")
-            print(result.stdout)
-            print()
-            print("You can now run: python setup_db.py")
+            logger.info("[OK] Permissions granted successfully!")
+            logger.info(f"Output: {result.stdout}")
+            logger.info("You can now run: python scripts/setup_db.py")
         else:
-            print("❌ Error granting permissions:")
-            print(result.stderr)
-            print()
-            print("You may need to run the following command manually:")
-            print()
-            print(
+            logger.error("[ERROR] Error granting permissions:")
+            logger.error(result.stderr)
+            logger.info("You may need to run the following command manually:")
+            logger.info(
                 f'psql -U postgres -d {db_name} -c "{sql.strip().replace(chr(10), " ")}"'
             )
             sys.exit(1)
 
     except FileNotFoundError:
-        print("❌ psql command not found.")
-        print("Make sure PostgreSQL is installed and psql is in your PATH.")
-        print()
-        print("Run the following command manually in psql:")
-        print()
-        print("# Connect to database:")
-        print(f"psql -U postgres -d {db_name}")
-        print()
-        print("# Then run:")
-        print(sql)
+        logger.error("[ERROR] psql command not found.")
+        logger.info("Make sure PostgreSQL is installed and psql is in your PATH.")
+        logger.info("Run the following command manually in psql:")
+        logger.info(f"# Connect to database: psql -U postgres -d {db_name}")
+        logger.info(f"# Then run: {sql}")
         sys.exit(1)
 
 
