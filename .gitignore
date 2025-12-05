@@ -33,3 +33,6 @@ Thumbs.db
 
 # Upload documents
 public/
+
+# Logs
+logs/*.log

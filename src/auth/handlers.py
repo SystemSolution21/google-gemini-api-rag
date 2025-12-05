@@ -1,18 +1,16 @@
-# auth.py
+# src/auth/handlers.py
 """
-Authentication module for Chainlit using custom password authentication.
-Integrates with PostgreSQL database for user management.
+Authentication handlers for Chainlit.
+
+Provides user authentication callbacks and helper functions
+for managing user sessions.
 """
 
-# imports built-in modules
 from typing import Optional
 
-# imports third-party modules
 import chainlit as cl
 
-# imports local modules
-from database import get_pool
-from models import User
+from src.db import User, get_pool
 
 
 @cl.password_auth_callback
@@ -39,7 +37,7 @@ async def auth_callback(username: str, password: str) -> Optional[cl.User]:
 
         if user_data:
             return cl.User(
-                identifier=user_data["username"],  # Use username instead of ID
+                identifier=user_data["username"],
                 metadata={
                     "username": user_data["username"],
                     "email": user_data["email"],
@@ -97,3 +95,4 @@ def get_current_username() -> Optional[str]:
     if user and user.metadata:
         return user.metadata.get("username")
     return None
+

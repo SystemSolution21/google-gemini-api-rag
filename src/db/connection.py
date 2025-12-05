@@ -1,18 +1,19 @@
-# database.py
+# src/db/connection.py
 """
-Database module for PostgreSQL connection and schema management.
-Handles user authentication, chat sessions, messages, and document storage.
+Database connection management module.
+
+Handles PostgreSQL connection pool creation, schema initialization,
+and connection lifecycle management.
 """
 
-# imports built-in modules
-import os
 from typing import Optional
 
-# imports third-party modules
 import asyncpg
-from dotenv import load_dotenv
 
-load_dotenv()
+from src.config import config
+from src.utils.logger import get_db_logger
+
+logger = get_db_logger()
 
 # Database connection pool
 _pool: Optional[asyncpg.Pool] = None
@@ -25,18 +26,21 @@ async def get_pool() -> asyncpg.Pool:
     -------
     asyncpg.Pool
         The database connection pool.
+
+    Raises
+    ------
+    ValueError
+        If DB_URL environment variable is not set.
     """
     global _pool
     if _pool is None:
-        # Use DB_URL instead of DATABASE_URL to avoid Chainlit auto-detecting it
-        database_url = os.getenv("DB_URL")
-        if not database_url:
+        if not config.DB_URL:
             raise ValueError("DB_URL environment variable not set")
-        _pool = await asyncpg.create_pool(database_url)
+        _pool = await asyncpg.create_pool(config.DB_URL)
     return _pool
 
 
-async def close_pool():
+async def close_pool() -> None:
     """Close the database connection pool."""
     global _pool
     if _pool:
@@ -44,7 +48,7 @@ async def close_pool():
         _pool = None
 
 
-async def init_database():
+async def init_database() -> None:
     """Initialize database schema with all required tables."""
     pool = await get_pool()
 
@@ -111,8 +115,8 @@ async def init_database():
         """)
 
         await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_documents_chat_session_id 
+            CREATE INDEX IF NOT EXISTS idx_documents_chat_session_id
             ON documents(chat_session_id)
         """)
 
-        print("✓ Database schema initialized successfully")
+        logger.info("[OK] Database schema initialized successfully")
