@@ -37,6 +37,7 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
     user_id = None
     if current_user and current_user.metadata:
         user_id = current_user.metadata.get("user_id")
+
     if not user_id:
         return []
 
