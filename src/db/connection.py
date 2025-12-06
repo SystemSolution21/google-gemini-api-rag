@@ -6,13 +6,17 @@ Handles PostgreSQL connection pool creation, schema initialization,
 and connection lifecycle management.
 """
 
+# imports built-in modules
 from typing import Optional
 
+# imports third-party modules
 import asyncpg
 
+# imports local modules
 from src.config import config
 from src.utils.logger import get_db_logger
 
+# Database logger
 logger = get_db_logger()
 
 # Database connection pool
@@ -36,6 +40,7 @@ async def get_pool() -> asyncpg.Pool:
     if _pool is None:
         if not config.DB_URL:
             raise ValueError("DB_URL environment variable not set")
+
         _pool = await asyncpg.create_pool(config.DB_URL)
     return _pool
 
