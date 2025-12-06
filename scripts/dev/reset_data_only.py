@@ -20,6 +20,7 @@ sys.path.insert(0, str(project_root))
 from src.db import get_pool
 from src.utils.logger import get_db_logger
 
+# Database logger
 logger = get_db_logger()
 
 

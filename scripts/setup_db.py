@@ -20,6 +20,7 @@ sys.path.insert(0, str(project_root))
 from src.db import User, close_pool, get_pool, init_database
 from src.utils.logger import get_db_logger
 
+# Database logger
 logger = get_db_logger()
 
 
@@ -55,7 +56,7 @@ async def create_admin_user():
 
 async def main():
     """Main setup function."""
-    logger.info("[SETUP] Starting database setup...")
+    logger.info("🛠️ Starting database setup...")
 
     try:
         # Initialize database schema

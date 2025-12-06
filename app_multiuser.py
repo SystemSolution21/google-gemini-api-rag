@@ -1,7 +1,7 @@
 # app_multiuser.py
 """
 Multi-user Chainlit chatbot with PostgreSQL persistence, user authentication,
-and chat session management. This is an enhanced version of app.py with:
+and chat session management.
 - User registration and login
 - Multiple chat sessions per user
 - Message and document persistence
@@ -9,6 +9,7 @@ and chat session management. This is an enhanced version of app.py with:
 """
 
 # imports built-in modules
+import re
 import shutil
 from pathlib import Path
 from typing import Any, Optional
@@ -24,26 +25,29 @@ from src.db import ChatSession, Document, Message, get_pool
 from src.utils import format_response_with_citations
 from src.utils.logger import get_app_logger
 
+# Application logger
 logger = get_app_logger()
 
 
 @cl.set_chat_profiles
 async def chat_profile(current_user: cl.User | None, current_chat_profile: str | None):
     """Set up chat profiles for recent chats."""
-    # Get numeric user_id from metadata (identifier is now the username for display)
+
+    # Get user id from current user metadata (username display as identifier)
     user_id = None
     if current_user and current_user.metadata:
         user_id = current_user.metadata.get("user_id")
     if not user_id:
         return []
 
+    # Create database connection pool
     pool = await get_pool()
     async with pool.acquire() as conn:
         sessions = await ChatSession.list_by_user(conn, user_id)
 
         profiles = []
 
-        # Add recent chats first - most recent is the default
+        # List user's most recent chats
         title_counts: dict[str, int] = {}
         for idx, session in enumerate(sessions[:5]):  # Show 5 most recent
             title = session["title"]
@@ -54,6 +58,7 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
                 title_counts[title] = 1
                 profile_name = title
 
+            # Add profile for the recent chat
             profiles.append(
                 cl.ChatProfile(
                     name=profile_name,
@@ -63,7 +68,7 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
                 )
             )
 
-        # Add management options after chats
+        # Add profile for new chat options
         profiles.append(
             cl.ChatProfile(
                 name="new_chat",
@@ -72,6 +77,7 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
                 default=(len(sessions) == 0),  # Default only if no chats exist
             )
         )
+        # Add profile for chat management option
         profiles.append(
             cl.ChatProfile(
                 name="manage_chats",
@@ -83,13 +89,143 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
         return profiles
 
 
+async def _handle_registration(user: cl.User):
+    """Handle the user registration flow within a valid chat context."""
+    if not user.metadata:
+        await cl.Message(
+            content="❌ Registration failed: User metadata not found."
+        ).send()
+        return
+
+    try:
+        # --- 1. Get Username ---
+        await cl.Message(content="👋 Welcome! Let's create your account.").send()
+        await cl.Message(content="**Step 1: Enter a username**").send()
+        cl.user_session.set("registration_step", "username")
+
+    except Exception as e:
+        await cl.Message(
+            content=f"❌ An error occurred during registration: {e}"
+        ).send()
+
+
+async def _handle_registration_step(step: str, value: str):
+    """
+    Process a single step of the conversational registration flow.
+
+    This function acts as a state machine, processing the input for the current
+    step and advancing to the next one.
+    """
+    if step == "username":
+        username = value
+        if not username:
+            await cl.Message(
+                content="❌ Username cannot be empty. Please try again."
+            ).send()
+            return
+
+        cl.user_session.set("registration_username", username)
+        cl.user_session.set("registration_step", "email")
+
+        user = cl.user_session.get("user")
+        email_from_login = "your_email@example.com"
+        if user and user.metadata:
+            email_from_login = user.metadata.get("email_from_login", email_from_login)
+
+        await cl.Message(
+            content=f"**Step 2: Enter your email address again**\n(`{email_from_login}`)"
+        ).send()
+
+    elif step == "email":
+        user = cl.user_session.get("user")
+        email_from_login = ""
+        if user and user.metadata:
+            email_from_login = user.metadata.get("email_from_login", "")
+        email = value if value else email_from_login
+
+        if not email or not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+            await cl.Message(
+                content=f"❌ Invalid email address: `{email}`. Please try again."
+            ).send()
+            return
+
+        cl.user_session.set("registration_email", email)
+        cl.user_session.set("registration_step", "password")
+        await cl.Message(
+            content="**Step 3: Enter a password** (must be at least 8 characters)"
+        ).send()
+
+    elif step == "password":
+        password = value
+        if not password:
+            await cl.Message(
+                content="❌ Password cannot be empty. Please try again."
+            ).send()
+            return
+
+        if len(password) < 8:
+            await cl.Message(
+                content="❌ Password must be at least 8 characters long. Please try again."
+            ).send()
+            return
+
+        cl.user_session.set("registration_password", password)
+        cl.user_session.set("registration_step", "password_confirm")
+        await cl.Message(content="**Step 4: Confirm your password**").send()
+
+    elif step == "password_confirm":
+        password_confirm = value
+        if not password_confirm:
+            await cl.Message(
+                content="❌ Password confirmation cannot be empty. Please try again."
+            ).send()
+            return
+
+        password = cl.user_session.get("registration_password")
+        if password != password_confirm:
+            await cl.Message(content="❌ Passwords do not match.").send()
+            # Reset to password step
+            cl.user_session.set("registration_step", "password")
+            await cl.Message(
+                content="**Step 3: Enter a password** (must be at least 8 characters)"
+            ).send()
+            return
+
+        # --- Final Step: Create User and End Flow ---
+        username = cl.user_session.get("registration_username")
+        email = cl.user_session.get("registration_email")
+        if username and email and password:
+            user_id = await auth.register_user(username, email, password)
+
+        # Clean up session state
+        cl.user_session.set("registration_step", None)
+        cl.user_session.set("registration_username", None)
+        cl.user_session.set("registration_email", None)
+        cl.user_session.set("registration_password", None)
+
+        if user_id:
+            await cl.Message(
+                content=f"✅ **Registration successful for user '{username}'!**\n\nPlease logout! And login again with your new credentials."
+            ).send()
+        else:
+            await cl.Message(
+                content="❌ **Registration failed.**\n\nThe username or email may already be in use. Please try again by refreshing the page and starting over."
+            ).send()
+
+
 @cl.on_chat_start
 async def start():
     """Handle the initial chat start event with authentication and session management."""
+
     # Get authenticated user
     user = cl.user_session.get("user")
-    if not user or not user.metadata:
+    if not user:
         await cl.Message(content="❌ Authentication required. Please log in.").send()
+        return
+
+    # Check for pending registration
+    if user.metadata.get("registration_pending"):
+        await _handle_registration(user)
         return
 
     # Check which profile was selected
@@ -576,12 +712,20 @@ async def process_pending_rename(message: cl.Message, pending_session_id: Any):
 @cl.on_message
 async def main(message: cl.Message):
     """Process user messages and file attachments with database persistence."""
-    # Check if there's a pending rename operation
+
+    # Check for registration flow
+    registration_step = cl.user_session.get("registration_step")
+    if registration_step:
+        await _handle_registration_step(registration_step, message.content.strip())
+        return
+
+    # Check pending chat rename operation
     pending_session_id = cl.user_session.get("pending_rename_session_id")
     if pending_session_id:
         await process_pending_rename(message, pending_session_id)
         return
 
+    # --- Main Chat Processing ---
     chat_session_id = cl.user_session.get("chat_session_id")
 
     if not chat_session_id:
@@ -637,10 +781,6 @@ async def main(message: cl.Message):
         except Exception as e:
             error_msg = f"❌ An error occurred: {str(e)}"
             await cl.Message(content=error_msg).send()
-
-            # Save error to database
-            async with pool.acquire() as conn:
-                await Message.create(conn, chat_session_id, "assistant", error_msg)
 
 
 @cl.on_stop

@@ -26,8 +26,10 @@ from dotenv import load_dotenv
 
 from src.utils.logger import get_db_logger
 
+# Load environment variables from .env file
 load_dotenv()
 
+# Database logger
 logger = get_db_logger()
 
 # SQL commands to grant permissions
@@ -64,7 +66,7 @@ def get_username_from_url() -> str:
 
 def main():
     """Main function to grant permissions."""
-    logger.info("[GRANT] PostgreSQL Schema Permission Grant Tool")
+    logger.info("🛠️ PostgreSQL Schema Permission Grant Tool")
     logger.info("=" * 50)
     logger.info("This script grants necessary permissions for PostgreSQL 15+")
     logger.info("Run this BEFORE running setup_db.py")

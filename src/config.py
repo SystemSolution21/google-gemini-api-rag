@@ -68,7 +68,7 @@ class Config:
 
         if errors:
             for error in errors:
-                logger.error(f"[ERROR] Configuration Error: {error}")
+                logger.error(f"❌ Configuration Error: {error}")
             return False
 
         return True
