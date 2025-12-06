@@ -1,7 +1,7 @@
 # app_multiuser.py
 """
 Multi-user Chainlit chatbot with PostgreSQL persistence, user authentication,
-and chat session management. This is an enhanced version of app.py with:
+and chat session management.
 - User registration and login
 - Multiple chat sessions per user
 - Message and document persistence
@@ -25,26 +25,29 @@ from src.db import ChatSession, Document, Message, get_pool
 from src.utils import format_response_with_citations
 from src.utils.logger import get_app_logger
 
+# Application logger
 logger = get_app_logger()
 
 
 @cl.set_chat_profiles
 async def chat_profile(current_user: cl.User | None, current_chat_profile: str | None):
     """Set up chat profiles for recent chats."""
-    # Get numeric user_id from metadata (identifier is now the username for display)
+
+    # Get user id from current user metadata (username display as identifier)
     user_id = None
     if current_user and current_user.metadata:
         user_id = current_user.metadata.get("user_id")
     if not user_id:
         return []
 
+    # Create database connection pool
     pool = await get_pool()
     async with pool.acquire() as conn:
         sessions = await ChatSession.list_by_user(conn, user_id)
 
         profiles = []
 
-        # Add recent chats first - most recent is the default
+        # List user's most recent chats
         title_counts: dict[str, int] = {}
         for idx, session in enumerate(sessions[:5]):  # Show 5 most recent
             title = session["title"]
@@ -55,6 +58,7 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
                 title_counts[title] = 1
                 profile_name = title
 
+            # Add profile for the recent chat
             profiles.append(
                 cl.ChatProfile(
                     name=profile_name,
@@ -64,7 +68,7 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
                 )
             )
 
-        # Add management options after chats
+        # Add profile for new chat options
         profiles.append(
             cl.ChatProfile(
                 name="new_chat",
@@ -73,6 +77,7 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
                 default=(len(sessions) == 0),  # Default only if no chats exist
             )
         )
+        # Add profile for chat management option
         profiles.append(
             cl.ChatProfile(
                 name="manage_chats",
@@ -122,17 +127,20 @@ async def _handle_registration_step(step: str, value: str):
         cl.user_session.set("registration_username", username)
         cl.user_session.set("registration_step", "email")
 
-        user_metadata = cl.user_session.get("user").metadata
-        email_from_login = user_metadata.get(
-            "email_from_login", "your_email@example.com"
-        )
+        user = cl.user_session.get("user")
+        email_from_login = "your_email@example.com"
+        if user and user.metadata:
+            email_from_login = user.metadata.get("email_from_login", email_from_login)
+
         await cl.Message(
             content=f"**Step 2: Enter your email address again**\n(`{email_from_login}`)"
         ).send()
 
     elif step == "email":
-        user_metadata = cl.user_session.get("user").metadata
-        email_from_login = user_metadata.get("email_from_login", "")
+        user = cl.user_session.get("user")
+        email_from_login = ""
+        if user and user.metadata:
+            email_from_login = user.metadata.get("email_from_login", "")
         email = value if value else email_from_login
 
         if not email or not re.match(r"[^@]+@[^@]+\.[^@]+", email):
@@ -186,7 +194,8 @@ async def _handle_registration_step(step: str, value: str):
         # --- Final Step: Create User and End Flow ---
         username = cl.user_session.get("registration_username")
         email = cl.user_session.get("registration_email")
-        user_id = await auth.register_user(username, email, password)
+        if username and email and password:
+            user_id = await auth.register_user(username, email, password)
 
         # Clean up session state
         cl.user_session.set("registration_step", None)
@@ -196,7 +205,7 @@ async def _handle_registration_step(step: str, value: str):
 
         if user_id:
             await cl.Message(
-                content=f"✅ **Registration successful for user '{username}'!**\n\nPlease close this tab and log in with your new credentials."
+                content=f"✅ **Registration successful for user '{username}'!**\n\nPlease logout! And login again with your new credentials."
             ).send()
         else:
             await cl.Message(
@@ -207,6 +216,7 @@ async def _handle_registration_step(step: str, value: str):
 @cl.on_chat_start
 async def start():
     """Handle the initial chat start event with authentication and session management."""
+
     # Get authenticated user
     user = cl.user_session.get("user")
     if not user:
@@ -702,12 +712,14 @@ async def process_pending_rename(message: cl.Message, pending_session_id: Any):
 @cl.on_message
 async def main(message: cl.Message):
     """Process user messages and file attachments with database persistence."""
+
     # Check for registration flow
     registration_step = cl.user_session.get("registration_step")
     if registration_step:
         await _handle_registration_step(registration_step, message.content.strip())
         return
-    # Check if there's a pending rename operation
+
+    # Check pending chat rename operation
     pending_session_id = cl.user_session.get("pending_rename_session_id")
     if pending_session_id:
         await process_pending_rename(message, pending_session_id)
