@@ -5,6 +5,7 @@ Base model utilities.
 Contains common password hashing functionality and other shared utilities.
 """
 
+# imports built-in modules
 import hashlib
 import secrets
 
@@ -22,8 +23,8 @@ def hash_password(password: str) -> str:
     str
         Hashed password with salt in format 'salt$hash'.
     """
-    salt = secrets.token_hex(16)
-    pwd_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+    salt: str = secrets.token_hex(nbytes=16)
+    pwd_hash: str = hashlib.sha256(data=(password + salt).encode()).hexdigest()
     return f"{salt}${pwd_hash}"
 
 
@@ -43,8 +44,7 @@ def verify_password(password: str, password_hash: str) -> bool:
         True if password matches, False otherwise.
     """
     try:
-        salt, pwd_hash = password_hash.split("$")
-        return hashlib.sha256((password + salt).encode()).hexdigest() == pwd_hash
+        salt, pwd_hash = password_hash.split(sep="$", maxsplit=1)
+        return hashlib.sha256(data=(password + salt).encode()).hexdigest() == pwd_hash
     except ValueError:
         return False
-
