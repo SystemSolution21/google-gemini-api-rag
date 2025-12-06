@@ -9,6 +9,7 @@ Usage:
 """
 
 # imports built-in modules
+import logging
 import sys
 from pathlib import Path
 
@@ -22,19 +23,17 @@ def main():
     sys.path.insert(0, str(project_root))
 
     # Local imports are here to avoid ruff E402
-    from src.config import config
-    from src.utils.logger import get_db_logger
+    from src.config import config  # noqa: E402
 
     # Validate config before proceeding
     config.validate_or_exit()
 
-    # Database logger
-    logger = get_db_logger()
+    # Use a console-only logger to avoid file lock issues
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logger = logging.getLogger(__name__)
 
-    # Logs directory
     logs_dir = Path(config.LOGS_DIR)
 
-    # Confirm with user before proceeding
     logger.warning(f"⚠️ This will delete all *.log files in the '{logs_dir}' folder!")
     confirm = input("Are you sure? (type 'yes' to confirm): ").strip().lower()
 
