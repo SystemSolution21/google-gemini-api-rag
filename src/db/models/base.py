@@ -24,7 +24,7 @@ def hash_password(password: str) -> str:
         Hashed password with salt in format 'salt$hash'.
     """
     salt: str = secrets.token_hex(nbytes=16)
-    pwd_hash: str = hashlib.sha256(data=(password + salt).encode()).hexdigest()
+    pwd_hash: str = hashlib.sha256((password + salt).encode()).hexdigest()
     return f"{salt}${pwd_hash}"
 
 
@@ -44,7 +44,7 @@ def verify_password(password: str, password_hash: str) -> bool:
         True if password matches, False otherwise.
     """
     try:
-        salt, pwd_hash = password_hash.split(sep="$", maxsplit=1)
-        return hashlib.sha256(data=(password + salt).encode()).hexdigest() == pwd_hash
+        salt, pwd_hash = password_hash.split(sep="$")
+        return hashlib.sha256((password + salt).encode()).hexdigest() == pwd_hash
     except ValueError:
         return False
