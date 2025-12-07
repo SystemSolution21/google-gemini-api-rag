@@ -6,16 +6,20 @@ Handles file uploads, processing, and chat session creation
 with the Google Gemini API.
 """
 
+# imports built-in modules
 import time
 from pathlib import Path
 from typing import List, Optional
 
+# imports third-party modules
 from google import genai
 from google.genai import chats, types
 
+# imports local modules
 from src.config import config
 from src.utils.logger import get_app_logger
 
+# Application logger
 logger = get_app_logger()
 
 # Create the Gemini client with API key
@@ -47,6 +51,7 @@ def upload_file(file_path: str, display_name: Optional[str] = None) -> types.Fil
     types.File
         A reference to the uploaded file returned by the Gemini client.
     """
+
     if not display_name:
         display_name = Path(file_path).name
 
@@ -73,6 +78,7 @@ def wait_for_files_active(files: List[types.File]) -> None:
     Exception
         If any file has no name or fails to reach the ``ACTIVE`` state.
     """
+
     logger.info("Waiting for file processing...")
     for file in files:
         if not file.name:
@@ -105,13 +111,14 @@ def create_chat_session(files: Optional[List[types.File]] = None) -> chats.Chat:
     chats.Chat
         A chat session object that can be used to send messages to Gemini.
     """
-    # Prepare system instruction
+
+    # System instruction
     system_instruction = """You are a helpful assistant. You have access to the provided files.
     Answer questions based on the information in these files.
     When citing sources, use the format (p. X) for page references, where X is the page number.
     Format your responses in a clear, readable style that works well with markdown rendering."""
 
-    # Prepare history with files if provided
+    # History with files provided
     history = []
     if files:
         # Add files to the initial history

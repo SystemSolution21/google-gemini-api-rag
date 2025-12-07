@@ -41,7 +41,7 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
     if not user_id:
         return []
 
-    # Create database connection pool
+    # Get database connection pool
     pool = await get_pool()
     async with pool.acquire() as conn:
         sessions = await ChatSession.list_by_user(conn, user_id)
@@ -241,7 +241,7 @@ async def start():
         await show_chat_management()
 
     elif chat_profile:
-        # Try to load chat by matching profile name to session title
+        # Load chat by matching profile name to session title
         await load_chat_by_profile_name(chat_profile)
 
     else:
