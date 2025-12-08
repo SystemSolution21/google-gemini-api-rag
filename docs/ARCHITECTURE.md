@@ -44,19 +44,69 @@ This is a multi-user Retrieval-Augmented Generation (RAG) application built with
 
 ```project
 google-gemini-api-rag/
-├── app.py                  # single-user app
+├── docs/                   # Documentation
+|   ├── ARCHITECTURE.md
+│   ├── APPLICATION_LIFECYCLE.md
+│   ├── QUICKSTART.md
+│   └── SETUP_MULTIUSER.md
+├── logs/                   # Application logs
+│   └── .gitkeep            # Ensures logs/ is tracked by git
+├── public/                 # User-uploaded documents
+├── src/                    # Source code
+│   ├── auth/
+│   |     ├── handlers.py   # Authentication handlers
+│   |     └── __init__.py   # Authentication package
+│   ├── core/
+│   |     ├── rag_manager.py  # Gemini API wrapper
+│   |     └── __init__.py     # Core package
+│   |
+│   ├── db/
+│   |     ├── connection.py         # Database connection management
+│   |     ├── models/
+│   |     |   ├── base.py           # Base model utilities
+│   |     |   ├── chat_session.py   # Chat session model
+│   |     |   ├── document.py       # Document model
+│   |     |   ├── message.py        # Message model
+│   |     |   └── user.py           # User model
+│   |     └── __init__.py           # Database package
+│   |
+│   └── utils/
+|   |   ├── formatters.py   # Response formatting utilities
+│   |   └── logger.py       # Logging utilities
+│   |   └── __init__.py     # Utilities package
+│   |
+│   ├── exceptions.py       # Custom exception classes
+│   ├── __init__.py         # Main source package
+│   └── config.py           # Application configuration
+│
+├── scripts/
+│   ├── dev/
+│   |   ├── reset_data_only.py      # Reset data but keep schema
+│   |   ├── reset_logs_files.py     # Delete all log files
+│   |   └── reset_upload_files.py   # Delete public folder
+│   |   └── __init__.py             # Development scripts package
+│   |
+│   ├── __init__.py               # Scripts package
+│   ├── grant_permissions.py      # Grant schema permissions
+│   └── setup_db.py               # Initialize database schema
+│
+├── tests/                    # Unit tests
+│   ├── integration/          # Integration tests
+│   |── unit/                 # Unit tests
+│   |── conftest.py           # Pytest configuration
+│   └── __init__.py           # Tests package
+│
 ├── app_multiuser.py        # Multi-user version
-├── auth.py                 # Authentication module
-├── database.py             # Database connection & schema
-├── models.py               # Database models (User, ChatSession, Message, Document)
-├── rag_manager.py          # Gemini API integration
-├── setup_db.py             # Database initialization script
 ├── config.toml             # Chainlit configuration
 ├── .env                    # Environment variables
+├── .env.example            # Example env file
+├── .gitignore              # Git ignore file
+├── LICENSE                 # License file
+├── main.py                 # Main entry point
+├── uv.lock                 # uv dependency lock file
+├── python-version          # Python version file
 ├── pyproject.toml          # Dependencies
-├── QUICKSTART.md           # Quick start guide
-├── SETUP_MULTIUSER.md      # Detailed setup guide
-└── ARCHITECTURE.md         # This file
+└── README.md               # Project README
 ```
 
 ## 🔐 Authentication Flow
@@ -75,7 +125,7 @@ google-gemini-api-rag/
 
 ```chat-flow
 1. User logs in → Welcome screen
-2. User clicks "New Chat" or "My Chats"
+2. User clicks "New Chat" or "Manage Chats"
 3. New Chat:
    - Prompt for title
    - Create record in chat_sessions table

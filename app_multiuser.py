@@ -72,7 +72,7 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
         # Add profile for new chat options
         profiles.append(
             cl.ChatProfile(
-                name="new_chat",
+                name="New Chat",
                 markdown_description="Create a new chat session",
                 icon="📝",
                 default=(len(sessions) == 0),  # Default only if no chats exist
@@ -81,7 +81,7 @@ async def chat_profile(current_user: cl.User | None, current_chat_profile: str |
         # Add profile for chat management option
         profiles.append(
             cl.ChatProfile(
-                name="manage_chats",
+                name="Manage Chats",
                 markdown_description="Manage all your chats (rename, delete)",
                 icon="⚙️",
             )
@@ -232,11 +232,11 @@ async def start():
     # Check which profile was selected
     chat_profile = cl.user_session.get("chat_profile")
 
-    if chat_profile == "new_chat":
+    if chat_profile == "New Chat":
         # Explicitly create new chat
         await create_new_chat_flow()
 
-    elif chat_profile == "manage_chats":
+    elif chat_profile == "Manage Chats":
         # Show management interface
         await show_chat_management()
 
