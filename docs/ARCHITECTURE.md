@@ -90,7 +90,7 @@ google-gemini-api-rag/
 │   ├── grant_permissions.py      # Grant schema permissions
 │   └── setup_db.py               # Initialize database schema
 │
-├── tests/                    # Unit tests
+├── tests/
 │   ├── integration/          # Integration tests
 │   |── unit/                 # Unit tests
 │   |── conftest.py           # Pytest configuration
