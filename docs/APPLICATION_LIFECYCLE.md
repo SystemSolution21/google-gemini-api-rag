@@ -6,7 +6,7 @@ The diagrams below illustrate the sequence of function calls for major user oper
 
 ---
 
-### 1. Initial Load & Chat Profile Selection
+## 1. Initial Load & Chat Profile Selection
 
 When a user first opens the chat, Chainlit prepares the initial screen by asking the application for a list of "chat profiles."
 
@@ -34,7 +34,7 @@ sequenceDiagram
 
 ---
 
-### 2. Starting a Chat Session
+## 2. Starting a Chat Session
 
 After the user selects a profile from the initial screen, the `@cl.on_chat_start` event is triggered, which calls the `start()` function to route the user to the correct flow.
 
@@ -83,7 +83,7 @@ sequenceDiagram
 
 ---
 
-### 3. User Sends a Message or File
+## 3. User Sends a Message or File
 
 Once a chat is active, any user input (a text message or a file upload) triggers the `@cl.on_message` event, which calls the `main()` function.
 
@@ -136,7 +136,7 @@ sequenceDiagram
 
 ---
 
-### 4. User Interacts with Chat Management Actions
+## 4. User Interacts with Chat Management Actions
 
 When the user is in the "Manage Chats" view, they can click an action button (Load, Rename, Delete), which triggers a corresponding `@cl.action_callback` function.
 
