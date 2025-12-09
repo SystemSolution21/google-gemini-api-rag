@@ -48,14 +48,19 @@ google-gemini-api-rag/
 |   ├── ARCHITECTURE.md
 │   ├── APPLICATION_LIFECYCLE.md
 │   ├── QUICKSTART.md
+│   ├── USER_REGISTRATION.md
 │   └── SETUP_MULTIUSER.md
+|
 ├── logs/                   # Application logs
 │   └── .gitkeep            # Ensures logs/ is tracked by git
+|
 ├── public/                 # User-uploaded documents
+|
 ├── src/                    # Source code
 │   ├── auth/
 │   |     ├── handlers.py   # Authentication handlers
 │   |     └── __init__.py   # Authentication package
+│   |
 │   ├── core/
 │   |     ├── rag_manager.py  # Gemini API wrapper
 │   |     └── __init__.py     # Core package
@@ -97,6 +102,7 @@ google-gemini-api-rag/
 │   └── __init__.py           # Tests package
 │
 ├── app_multiuser.py        # Multi-user version
+├── chainlit.md             # Chainlit welcome screen 
 ├── config.toml             # Chainlit configuration
 ├── .env                    # Environment variables
 ├── .env.example            # Example env file
