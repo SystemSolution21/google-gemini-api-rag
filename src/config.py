@@ -6,11 +6,13 @@ Loads environment variables and provides configuration settings
 for the application.
 """
 
+# imports built-in modules
 import logging
 import os
 import sys
 from typing import Optional
 
+# imports third-party modules
 from dotenv import load_dotenv
 
 # Use basic logger here to avoid circular import with src.utils.logger
