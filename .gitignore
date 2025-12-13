@@ -12,7 +12,6 @@ wheels/
 # .env file
 .env
 
-
 # Chainlit
 chainlit.db
 .chainlit/
@@ -32,7 +31,7 @@ Thumbs.db
 .files/
 
 # Upload documents
-public/
+public/*
 
 # Logs
 logs/*.log
