@@ -6,6 +6,7 @@ Provides centralized logging configuration for the application.
 """
 
 import logging
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -46,7 +47,7 @@ def setup_logger(
 
     # Create formatter
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        "%(asctime)s - %(name)s - %(module)s - %(levelname)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
@@ -72,37 +73,28 @@ def setup_logger(
     return logger
 
 
-def get_app_logger() -> logging.Logger:
-    """Get the main application logger.
+def get_app_logger():
+    logger = logging.getLogger("gemini_rag")
 
-    Returns
-    -------
-    logging.Logger
-        The main application logger with file and console output.
-    """
-    today: str = datetime.now().strftime(format="%Y-%m-%d")
-    return setup_logger(name="gemini_rag", log_file=f"app_{today}.log")
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(module)s - %(levelname)s - %(message)s"
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+
+    return logger
 
 
 def get_db_logger() -> logging.Logger:
-    """Get the database operations logger.
-
-    Returns
-    -------
-    logging.Logger
-        Logger for database operations.
-    """
+    """Get the database operations logger."""
     today = datetime.now().strftime("%Y-%m-%d")
     return setup_logger("gemini_rag.db", log_file=f"db_{today}.log")
 
 
 def get_auth_logger() -> logging.Logger:
-    """Get the authentication logger.
-
-    Returns
-    -------
-    logging.Logger
-        Logger for authentication events.
-    """
+    """Get the authentication logger."""
     today = datetime.now().strftime("%Y-%m-%d")
     return setup_logger("gemini_rag.auth", log_file=f"auth_{today}.log")

@@ -7,8 +7,10 @@ with the Google Gemini API.
 """
 
 # imports built-in modules
+import os
+import shutil
 import time
-from pathlib import Path
+import uuid
 from typing import List, Optional
 
 # imports third-party modules
@@ -35,30 +37,34 @@ generation_config = types.GenerateContentConfig(
 )
 
 
-def upload_file(file_path: str, display_name: Optional[str] = None) -> types.File:
-    """Upload a file to the Gemini API.
+async def upload_file(file_path: str, display_name: str | None = None) -> types.File:
+    """Upload a file to Gemini and return the File object."""
+    try:
+        # Use display_name if provided, otherwise extract from path
+        name = display_name or os.path.basename(file_path)
+        logger.info(f"Uploading file: {name}")
 
-    Parameters
-    ----------
-    file_path : str
-        Path to the local file to be uploaded.
-    display_name : Optional[str], default None
-        Optional display name for the file in Gemini. If omitted, the
-        filename from ``file_path`` is used.
+        # Create ASCII-safe temporary filename for upload
+        file_ext = os.path.splitext(file_path)[1]
+        temp_filename = f"upload_{uuid.uuid4().hex}{file_ext}"
+        temp_path = os.path.join(os.path.dirname(file_path), temp_filename)
 
-    Returns
-    -------
-    types.File
-        A reference to the uploaded file returned by the Gemini client.
-    """
+        # Copy file to temp location with ASCII-safe name
+        shutil.copy2(file_path, temp_path)
 
-    if not display_name:
-        display_name = Path(file_path).name
+        try:
+            # Upload file using the ASCII-safe path
+            uploaded_file = client.files.upload(file=temp_path)
+            logger.info(f"File uploaded successfully: {uploaded_file.uri}")
+            return uploaded_file
+        finally:
+            # Clean up temp file
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
-    logger.info(f"Uploading file: {display_name}...")
-    file_ref = client.files.upload(file=file_path)
-    logger.info(f"Completed upload: {file_ref.uri}")
-    return file_ref
+    except Exception as e:
+        logger.error(f"Error uploading file: {str(e)}", exc_info=True)
+        raise
 
 
 def wait_for_files_active(files: List[types.File]) -> None:

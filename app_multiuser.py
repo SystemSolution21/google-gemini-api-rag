@@ -195,6 +195,8 @@ async def _handle_registration_step(step: str, value: str):
         # --- Final Step: Create User and End Flow ---
         username = cl.user_session.get("registration_username")
         email = cl.user_session.get("registration_email")
+        user_id = None  # Initialize to None
+
         if username and email and password:
             user_id = await auth.register_user(username, email, password)
 
@@ -595,8 +597,10 @@ async def process_uploaded_file(file):
             f.write(src.read())
 
     try:
-        # Upload to Gemini
-        gemini_file = rag_manager.upload_file(str(file_path))
+        # Upload to Gemini (ADD AWAIT HERE)
+        gemini_file = await rag_manager.upload_file(
+            str(file_path), display_name=file.name
+        )
         rag_manager.wait_for_files_active([gemini_file])
 
         # Save document to database and update chat title to file name
