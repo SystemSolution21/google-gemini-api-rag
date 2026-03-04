@@ -17,7 +17,8 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 # imports local modules
-from src.db import User, close_pool, get_pool, init_database
+from src.db import User
+from src.db.connection import close_pool, get_pool, init_database
 from src.utils.logger import get_db_logger
 
 # Database logger
