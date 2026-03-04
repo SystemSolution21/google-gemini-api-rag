@@ -117,3 +117,42 @@ class User:
         )
         return dict(user) if user else None
 
+    @staticmethod
+    async def update_password(
+        conn: asyncpg.Connection, username_or_email: str, new_password: str
+    ) -> bool:
+        """Update a user's password given their username or email.
+
+        This helper is primarily used by development scripts and tests,
+        but it may also be useful for future account management features.
+
+        Parameters
+        ----------
+        conn : asyncpg.Connection
+            Active database connection.
+        username_or_email : str
+            Username or email address identifying the user.
+        new_password : str
+            Plain text new password (will be hashed internally).
+
+        Returns
+        -------
+        bool
+            ``True`` if a row was updated (user existed), ``False`` otherwise.
+        """
+        # look up the user first
+        user = await conn.fetchrow(
+            "SELECT id FROM users WHERE username = $1 OR email = $1",
+            username_or_email,
+        )
+        if not user:
+            return False
+
+        password_hash = hash_password(new_password)
+        result = await conn.execute(
+            "UPDATE users SET password_hash = $1 WHERE id = $2",
+            password_hash,
+            user["id"],
+        )
+        # asyncpg returns a string like 'UPDATE 1' when a row was affected
+        return result.startswith("UPDATE") and result.endswith("1")

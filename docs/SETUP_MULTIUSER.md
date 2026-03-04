@@ -120,6 +120,33 @@ Run the setup script to create tables and admin user:
 python setup_db.py
 ```
 
+### Developer utility scripts
+
+The `scripts/dev` directory contains a few convenience tools you can use
+during development or testing. They are **not** intended for production use:
+
+- `reset_data_only.py` – wipes all tables but keeps the schema intact.
+- `reset_upload_files.py` – deletes the `public/` directory used for file
+  uploads.
+- **`reset_password.py`** – look up a user by username or email and
+  overwrite their password hash. This is useful when you forget the
+  administrator password while working locally.
+
+**To reset the password:**
+
+```bash
+python scripts/dev/reset_password.py
+```
+
+**To run the tests:**
+
+```bash
+pytest -v
+```
+
+Everyone who uses these scripts should understand they directly manipulate
+production data if pointed at a live database.
+
 This will:
 
 - Create all necessary database tables (users, chat_sessions, messages, documents)
@@ -127,7 +154,7 @@ This will:
 
 Example:
 
-```
+```pwsh
 Enter admin username: admin
 Enter admin email: admin@example.com
 Enter admin password: ********
