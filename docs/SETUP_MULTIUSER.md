@@ -180,7 +180,7 @@ The application will start at `http://localhost:8000`
 
 ### Tables
 
-**users**
+#### users
 
 - `id` - Primary key
 - `username` - Unique username
@@ -189,7 +189,7 @@ The application will start at `http://localhost:8000`
 - `created_at` - Account creation timestamp
 - `last_login` - Last login timestamp
 
-**chat_sessions**
+#### chat_sessions
 
 - `id` - Primary key
 - `user_id` - Foreign key to users
@@ -198,7 +198,7 @@ The application will start at `http://localhost:8000`
 - `updated_at` - Last update timestamp
 - `is_deleted` - Soft delete flag
 
-**messages**
+#### messages
 
 - `id` - Primary key
 - `chat_session_id` - Foreign key to chat_sessions
@@ -206,7 +206,7 @@ The application will start at `http://localhost:8000`
 - `content` - Message text
 - `created_at` - Timestamp
 
-**documents**
+#### documents
 
 - `id` - Primary key
 - `chat_session_id` - Foreign key to chat_sessions
@@ -252,14 +252,3 @@ python grant_permissions.py
 # Option 2: Run psql command directly
 psql -U postgres -d gemini_rag -c "GRANT ALL ON SCHEMA public TO gemini_user; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO gemini_user; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO gemini_user; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO gemini_user; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO gemini_user;"
 ```
-
-## Next Steps
-
-Now you can implement the updated `app.py` with:
-
-- Chat session management UI
-- Document persistence
-- Message history loading
-- User profile management
-
-See the implementation in the updated `app.py` file.
