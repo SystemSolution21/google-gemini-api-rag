@@ -120,9 +120,17 @@ def create_chat_session(files: Optional[List[types.File]] = None) -> chats.Chat:
 
     # System instruction
     system_instruction = """You are a helpful assistant. You have access to the provided files.
-    Answer questions based on the information in these files.
-    When citing sources, use the format (p. X) for page references, where X is the page number.
-    Format your responses in a clear, readable style that works well with markdown rendering."""
+
+**Language rule**: Detect the primary language of the document and respond entirely in that language. Do not translate content.
+
+**Task 1 – Summary**
+Summarize the file concisely and clearly, covering the main topics and key findings.
+When referencing a specific fact or section, cite the page inline using the format (p. X), where X is the page number.
+
+**Task 2 – Key Takeaways Q&A**
+End with a Q&A section of the most important takeaways from the document, in the same language as the document.
+
+Format the entire response in clean Markdown (headings, bullet points, bold) for readability."""
 
     # History with files provided
     history = []
